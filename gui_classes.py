@@ -19,7 +19,7 @@ import db_operations
 
 # --- Constants Defined Here ---
 # --- !!! Updated Icon Filename !!! ---
-ICON_FILENAME = "ocean.ico" # Using the requested icon name
+ICON_FILENAME = "oceans.ico" # Using the requested icon name
 
 
 # --- Helper Function to Center Windows ---
