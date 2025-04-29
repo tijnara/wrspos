@@ -61,7 +61,7 @@ class CustomerSelectionDialog(tk.Toplevel):
         set_window_icon(self)
 
         dialog_width = 350
-        dialog_height = 150
+        dialog_height = 250 # Increased height for listbox
         self.result = None
         self.update_idletasks()
         parent_x = parent.winfo_x()
@@ -74,92 +74,105 @@ class CustomerSelectionDialog(tk.Toplevel):
         calc_height = max(req_height, dialog_height)
         x = parent_x + (parent_width // 2) - (calc_width // 2)
         y = parent_y + (parent_height // 2) - (calc_height // 2)
-        self.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
+        self.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}') # Set initial size and position
+
         self.transient(parent)
         self.grab_set()
         self.columnconfigure(0, weight=1)
-        ttk.Label(self, text="Select existing or enter new customer:").grid(row=0, column=0, pady=(10, 5), padx=10, sticky='w')
+        # Configure rows: Entry, Listbox (expandable), Buttons
+        self.rowconfigure(1, weight=1)
 
+        ttk.Label(self, text="Enter or select customer name:").grid(row=0, column=0, pady=(10, 2), padx=10, sticky='w')
+
+        # Fetch and store the full list initially
         self.all_customer_names = db_operations.fetch_distinct_customer_names()
+        # Remove 'N/A' from suggestions if present, handle it separately
+        if 'N/A' in self.all_customer_names:
+            self.all_customer_names.remove('N/A')
+
         self.customer_var = tk.StringVar()
-        self.customer_combobox = ttk.Combobox(self, textvariable=self.customer_var, values=self.all_customer_names)
-        self.customer_combobox.grid(row=1, column=0, pady=5, padx=10, sticky='ew')
-        self.customer_combobox.focus_set()
+        # Use Entry instead of Combobox
+        self.customer_entry = ttk.Entry(self, textvariable=self.customer_var, width=40)
+        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')
+        self.customer_entry.focus_set()
 
         # Bind key release event to update suggestions
-        self.customer_combobox.bind('<KeyRelease>', self.update_suggestions)
-        # Handle selection from dropdown more reliably
-        self.customer_combobox.bind('<<ComboboxSelected>>', self.on_combobox_select)
+        self.customer_entry.bind('<KeyRelease>', self.update_suggestions)
 
+        # Frame for Listbox and Scrollbar
+        list_frame = ttk.Frame(self)
+        list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')
+        list_frame.rowconfigure(0, weight=1)
+        list_frame.columnconfigure(0, weight=1)
+        self.rowconfigure(2, weight=1) # Allow list frame to expand
 
+        # Listbox for suggestions
+        self.suggestion_listbox = tk.Listbox(list_frame, height=5, exportselection=False) # Limit initial height
+        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')
+        self.suggestion_listbox.bind('<ButtonRelease-1>', self.on_suggestion_select) # Bind click
+
+        # Scrollbar for Listbox
+        list_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.suggestion_listbox.yview)
+        self.suggestion_listbox.configure(yscrollcommand=list_scrollbar.set)
+        list_scrollbar.grid(row=0, column=1, sticky='ns')
+
+        # Initially hide the listbox frame
+        list_frame.grid_remove()
+        self.list_frame = list_frame # Store reference to hide/show
+
+        # Button frame
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=2, column=0, pady=10)
+        button_frame.grid(row=3, column=0, pady=10) # Buttons now on row 3
         ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_button.pack(side=tk.LEFT, padx=10)
+
         self.bind('<Return>', lambda event=None: self.on_ok())
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
         self.wait_window(self)
 
-    def on_combobox_select(self, event=None):
-        """ Ensures the typed text doesn't get overwritten when selecting from dropdown"""
-        pass
-
     def update_suggestions(self, event=None):
-        """Filter combobox values based on typed text (starts with) and pop down list only for 1-3 chars."""
+        """Filter customer list based on typed text and show in listbox."""
+        # --- FIX: Define typed_lower near the top ---
         current_text = self.customer_var.get()
-        typed_lower = current_text.lower()
-        cursor_pos = self.customer_combobox.index(tk.INSERT)
+        typed_lower = current_text.lower() # Define it here
+        cursor_pos = self.customer_entry.index(tk.INSERT) # Get cursor position from Entry
 
-        # Ignore non-character keys
-        if event and hasattr(event, 'keysym') and event.keysym not in ('BackSpace', 'Delete') and len(event.keysym) > 1 :
-            if not event.keysym.startswith('F'):
+        # Ignore navigation/modifier keys
+        if event and hasattr(event, 'keysym') and len(event.keysym) > 1 and event.keysym not in ('BackSpace', 'Delete'):
+             if not event.keysym.startswith('F'):
                  return
 
-        # --- Filter logic based on text length ---
-        text_len = len(current_text)
-        suggestions = []
-        show_dropdown = False
+        self.suggestion_listbox.delete(0, tk.END) # Clear previous suggestions
 
-        if text_len == 0:
-            # If entry is empty, show all names in dropdown if opened manually
-            suggestions = self.all_customer_names
-        elif text_len >= 1:
-            # Filter names STARTING WITH the typed text (case-insensitive)
-            suggestions = [name for name in self.all_customer_names if name.lower().startswith(typed_lower)]
-            suggestions = suggestions[:10] # Limit suggestions
-            # Decide whether to pop down the list automatically
-            if 1 <= text_len <= 3 and suggestions:
-                show_dropdown = True
+        if not current_text:
+            self.list_frame.grid_remove() # Hide if empty
+            return
 
-        # Update the list only if it has changed
-        if tuple(suggestions) != tuple(self.customer_combobox['values']):
-            self.customer_combobox['values'] = suggestions
+        # Filter names STARTING WITH the typed text (case-insensitive)
+        suggestions = [name for name in self.all_customer_names if name.lower().startswith(typed_lower)]
 
-        # Restore the text and cursor position *after* updating values
-        # This prevents the entry field from clearing or changing unexpectedly
-        self.customer_var.set(current_text)
-        if cursor_pos is not None:
-            try:
-                # Ensure cursor position is valid before setting
-                self.customer_combobox.icursor(min(cursor_pos, len(current_text)))
-            except tk.TclError: # Handle potential errors if index is invalid
-                self.customer_combobox.icursor(tk.END)
+        if suggestions:
+            for name in suggestions[:10]: # Limit to 10 suggestions
+                self.suggestion_listbox.insert(tk.END, name)
+            self.list_frame.grid() # Show the listbox frame
+        else:
+            self.list_frame.grid_remove() # Hide if no suggestions
 
-
-        # Pop down list if conditions met
-        if show_dropdown:
-            # Use after_idle to allow Tkinter to process the KeyRelease before popping down
-            self.after_idle(lambda: self.customer_combobox.event_generate('<Down>'))
-        # Optional: Close dropdown if no suggestions match and length > 0?
-        # elif not suggestions and text_len > 0:
-        #     self.after_idle(lambda: self.customer_combobox.event_generate('<Escape>'))
-
+    def on_suggestion_select(self, event=None):
+        """Update entry field when a suggestion is clicked."""
+        selection_indices = self.suggestion_listbox.curselection()
+        if selection_indices:
+            selected_name = self.suggestion_listbox.get(selection_indices[0])
+            self.customer_var.set(selected_name) # Update the entry field text
+            self.list_frame.grid_remove() # Hide listbox after selection
+            self.customer_entry.icursor(tk.END) # Move cursor to end
+            self.customer_entry.focus_set() # Keep focus on entry
 
     def on_ok(self):
         """Handle OK button click. Add new customer if necessary."""
-        selected_name = self.customer_var.get().strip()
+        selected_name = self.customer_var.get().strip() # Get text from entry
         if not selected_name:
             self.result = "N/A"
         else:
@@ -171,9 +184,9 @@ class CustomerSelectionDialog(tk.Toplevel):
                     is_new = False
                     break
             if is_new and selected_name != 'N/A':
-                print(f"Adding new customer from selection dialog: {selected_name}")
+                print(f"Adding new customer from dialog: {selected_name}")
                 if not db_operations.add_customer_to_db(selected_name, None, None):
-                    print(f"Warning: Could not add new customer '{selected_name}' via selection dialog.")
+                    print(f"Warning: Could not add new customer '{selected_name}' via dialog.")
                     pass
         self.destroy()
 
@@ -779,11 +792,11 @@ class POSApp:
         # Configure product frame grid rows/columns for resizing
         self.product_frame.columnconfigure(0, weight=1)
         self.product_frame.columnconfigure(1, weight=0)
-        self.product_frame.rowconfigure(1, weight=1) # Product button area
-        self.product_frame.rowconfigure(2, weight=0) # Custom button row
-        self.product_frame.rowconfigure(4, weight=1) # Product management list area
-        self.product_frame.rowconfigure(3, weight=0) # Separator/Label fixed height
-        self.product_frame.rowconfigure(5, weight=0) # Buttons fixed height
+        self.product_frame.rowconfigure(1, weight=1)
+        self.product_frame.rowconfigure(2, weight=0)
+        self.product_frame.rowconfigure(4, weight=1)
+        self.product_frame.rowconfigure(3, weight=0)
+        self.product_frame.rowconfigure(5, weight=0)
 
         # Configure sale frame grid rows/columns for resizing
         self.sale_frame.columnconfigure(0, weight=1)
@@ -804,7 +817,7 @@ class POSApp:
         self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
         self.product_canvas.grid(row=1, column=0, sticky="nsew")
         product_scrollbar.grid(row=1, column=1, sticky="ns")
-        self.populate_product_buttons() # This now includes the Custom button
+        self.populate_product_buttons()
 
         # --- Product Management Section ---
         ttk.Separator(self.product_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10) # Reduced pady
