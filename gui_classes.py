@@ -4,7 +4,7 @@ from tkinter import messagebox
 from tkinter import simpledialog
 import datetime
 import os # Keep os import for checking icon file
-import sqlite3 # Import needed for sqlite3.Error in SalesHistoryWindow
+import sqlite3 # Import needed for sqlite3.Error
 
 # --- External Libraries ---
 from dateutil.relativedelta import relativedelta, MO, SU
@@ -18,7 +18,6 @@ except ImportError:
 import db_operations
 
 # --- Constants Defined Here ---
-# --- !!! Updated Icon Filename !!! ---
 ICON_FILENAME = "oceans.ico" # Using the requested icon name
 
 
@@ -32,7 +31,12 @@ def center_window(window, width=None, height=None):
     sh = window.winfo_screenheight()
     x = (sw // 2) - (w // 2)
     y = (sh // 2) - (h // 2)
-    window.geometry(f'{w}x{h}+{x}+{y}')
+    if w > 0 and h > 0:
+        window.geometry(f'{w}x{h}+{x}+{y}')
+    else:
+         x = (sw // 2)
+         y = (sh // 2)
+         window.geometry(f'+{x}+{y}')
 
 # --- Helper Function to Set Icon ---
 def set_window_icon(window):
@@ -40,7 +44,6 @@ def set_window_icon(window):
     if os.path.exists(ICON_FILENAME):
         try:
             window.iconbitmap(ICON_FILENAME)
-            # print(f"Icon '{ICON_FILENAME}' set for {window.title()}.") # Optional debug print
         except tk.TclError as e:
             print(f"Error setting icon '{ICON_FILENAME}' for {window.title()}: {e}.")
         except Exception as e:
@@ -55,7 +58,7 @@ class CustomerSelectionDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Select or Enter Customer")
-        set_window_icon(self) # Set icon for this dialog
+        set_window_icon(self)
 
         dialog_width = 350
         dialog_height = 150
@@ -67,19 +70,28 @@ class CustomerSelectionDialog(tk.Toplevel):
         parent_height = parent.winfo_height()
         req_width = self.winfo_reqwidth()
         req_height = self.winfo_reqheight()
-        x = parent_x + (parent_width // 2) - (req_width // 2)
-        y = parent_y + (parent_height // 2) - (req_height // 2)
-        self.geometry(f'+{x}+{y}')
+        calc_width = max(req_width, dialog_width)
+        calc_height = max(req_height, dialog_height)
+        x = parent_x + (parent_width // 2) - (calc_width // 2)
+        y = parent_y + (parent_height // 2) - (calc_height // 2)
+        self.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
         self.transient(parent)
         self.grab_set()
         self.columnconfigure(0, weight=1)
         ttk.Label(self, text="Select existing or enter new customer:").grid(row=0, column=0, pady=(10, 5), padx=10, sticky='w')
-        # Fetch names using the imported function
-        self.customer_names_list = db_operations.fetch_distinct_customer_names()
+
+        self.all_customer_names = db_operations.fetch_distinct_customer_names()
         self.customer_var = tk.StringVar()
-        self.customer_combobox = ttk.Combobox(self, textvariable=self.customer_var, values=self.customer_names_list)
+        self.customer_combobox = ttk.Combobox(self, textvariable=self.customer_var, values=self.all_customer_names)
         self.customer_combobox.grid(row=1, column=0, pady=5, padx=10, sticky='ew')
         self.customer_combobox.focus_set()
+
+        # Bind key release event to update suggestions
+        self.customer_combobox.bind('<KeyRelease>', self.update_suggestions)
+        # Handle selection from dropdown more reliably
+        self.customer_combobox.bind('<<ComboboxSelected>>', self.on_combobox_select)
+
+
         button_frame = ttk.Frame(self)
         button_frame.grid(row=2, column=0, pady=10)
         ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
@@ -90,6 +102,61 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
         self.wait_window(self)
 
+    def on_combobox_select(self, event=None):
+        """ Ensures the typed text doesn't get overwritten when selecting from dropdown"""
+        pass
+
+    def update_suggestions(self, event=None):
+        """Filter combobox values based on typed text (starts with) and pop down list only for 1-3 chars."""
+        current_text = self.customer_var.get()
+        typed_lower = current_text.lower()
+        cursor_pos = self.customer_combobox.index(tk.INSERT)
+
+        # Ignore non-character keys
+        if event and hasattr(event, 'keysym') and event.keysym not in ('BackSpace', 'Delete') and len(event.keysym) > 1 :
+            if not event.keysym.startswith('F'):
+                 return
+
+        # --- Filter logic based on text length ---
+        text_len = len(current_text)
+        suggestions = []
+        show_dropdown = False
+
+        if text_len == 0:
+            # If entry is empty, show all names in dropdown if opened manually
+            suggestions = self.all_customer_names
+        elif text_len >= 1:
+            # Filter names STARTING WITH the typed text (case-insensitive)
+            suggestions = [name for name in self.all_customer_names if name.lower().startswith(typed_lower)]
+            suggestions = suggestions[:10] # Limit suggestions
+            # Decide whether to pop down the list automatically
+            if 1 <= text_len <= 3 and suggestions:
+                show_dropdown = True
+
+        # Update the list only if it has changed
+        if tuple(suggestions) != tuple(self.customer_combobox['values']):
+            self.customer_combobox['values'] = suggestions
+
+        # Restore the text and cursor position *after* updating values
+        # This prevents the entry field from clearing or changing unexpectedly
+        self.customer_var.set(current_text)
+        if cursor_pos is not None:
+            try:
+                # Ensure cursor position is valid before setting
+                self.customer_combobox.icursor(min(cursor_pos, len(current_text)))
+            except tk.TclError: # Handle potential errors if index is invalid
+                self.customer_combobox.icursor(tk.END)
+
+
+        # Pop down list if conditions met
+        if show_dropdown:
+            # Use after_idle to allow Tkinter to process the KeyRelease before popping down
+            self.after_idle(lambda: self.customer_combobox.event_generate('<Down>'))
+        # Optional: Close dropdown if no suggestions match and length > 0?
+        # elif not suggestions and text_len > 0:
+        #     self.after_idle(lambda: self.customer_combobox.event_generate('<Escape>'))
+
+
     def on_ok(self):
         """Handle OK button click. Add new customer if necessary."""
         selected_name = self.customer_var.get().strip()
@@ -98,14 +165,13 @@ class CustomerSelectionDialog(tk.Toplevel):
         else:
             self.result = selected_name
             is_new = True
-            # Case-insensitive check against the fetched list
-            for existing_name in self.customer_names_list:
+            current_db_names = db_operations.fetch_distinct_customer_names()
+            for existing_name in current_db_names:
                 if selected_name.lower() == existing_name.lower():
                     is_new = False
                     break
             if is_new and selected_name != 'N/A':
                 print(f"Adding new customer from selection dialog: {selected_name}")
-                # Add to DB using imported function
                 if not db_operations.add_customer_to_db(selected_name, None, None):
                     print(f"Warning: Could not add new customer '{selected_name}' via selection dialog.")
                     pass
@@ -121,7 +187,7 @@ class SalesHistoryWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Sales History & Summary")
-        set_window_icon(self) # Set icon for this window
+        set_window_icon(self)
 
         win_width = 850
         win_height = 750
@@ -133,9 +199,14 @@ class SalesHistoryWindow(tk.Toplevel):
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
         self.rowconfigure(3, weight=0)
-        self.rowconfigure(4, weight=0)
+        self.rowconfigure(4, weight=1)
+        self.rowconfigure(5, weight=0)
+        self.rowconfigure(6, weight=0)
+
+        # --- Widgets ---
         ttk.Label(self, text="Sales List", font=("Arial", 14, "bold")).grid(row=0, column=0, pady=10, padx=10, sticky="w")
         ttk.Label(self, text="Receipt Details", font=("Arial", 14, "bold")).grid(row=0, column=1, pady=10, padx=10, sticky="w")
+
         list_frame = ttk.Frame(self)
         list_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=5)
         list_frame.rowconfigure(0, weight=1)
@@ -155,6 +226,7 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.configure(yscrollcommand=sales_list_scrollbar.set)
         sales_list_scrollbar.grid(row=0, column=1, sticky="ns")
         self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)
+
         text_frame = ttk.Frame(self)
         text_frame.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=5)
         text_frame.rowconfigure(0, weight=1)
@@ -164,6 +236,7 @@ class SalesHistoryWindow(tk.Toplevel):
         receipt_text_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.receipt_text.yview)
         self.receipt_text.configure(yscrollcommand=receipt_text_scrollbar.set)
         receipt_text_scrollbar.grid(row=0, column=1, sticky="ns")
+
         summary_frame = ttk.LabelFrame(self, text="Default Summaries", padding="5")
         summary_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
         summary_frame.columnconfigure(1, weight=1)
@@ -173,30 +246,28 @@ class SalesHistoryWindow(tk.Toplevel):
         ttk.Label(summary_frame, text="This Month:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         self.month_total_label = ttk.Label(summary_frame, text=f"{db_operations.CURRENCY_SYMBOL}0.00", font=("Arial", 10, "bold"))
         self.month_total_label.grid(row=1, column=1, sticky="e", padx=5, pady=2)
-        custom_summary_frame = ttk.LabelFrame(self, text="Custom Date Range Summary", padding="10")
-        custom_summary_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
-        custom_summary_frame.columnconfigure(1, weight=0)
-        custom_summary_frame.columnconfigure(3, weight=0)
-        custom_summary_frame.columnconfigure(4, weight=0)
-        custom_summary_frame.columnconfigure(5, weight=1)
-        ttk.Label(custom_summary_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w')
-        self.start_date_entry = DateEntry(custom_summary_frame, width=12, background='darkblue',
+
+        custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10")
+        custom_entry_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
+        custom_entry_frame.columnconfigure(1, weight=0)
+        custom_entry_frame.columnconfigure(3, weight=0)
+        custom_entry_frame.columnconfigure(4, weight=1)
+        ttk.Label(custom_entry_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w')
+        self.start_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                           foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.start_date_entry.grid(row=0, column=1, padx=(0, 10), pady=5)
-        ttk.Label(custom_summary_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w')
-        self.end_date_entry = DateEntry(custom_summary_frame, width=12, background='darkblue',
+        ttk.Label(custom_entry_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w')
+        self.end_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                         foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.end_date_entry.grid(row=0, column=3, padx=(0, 10), pady=5)
         self.end_date_entry.set_date(datetime.date.today())
-        view_range_button = ttk.Button(custom_summary_frame, text="View Detailed Summary", command=self.update_custom_summary)
+        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary", command=self.update_custom_summary)
         view_range_button.grid(row=0, column=4, padx=(10, 5), pady=5, sticky='e')
 
-        # Custom Summary Treeview Frame
         custom_summary_tree_frame = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5")
-        custom_summary_tree_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=10, pady=5) # Row 4
+        custom_summary_tree_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
         custom_summary_tree_frame.rowconfigure(0, weight=1)
         custom_summary_tree_frame.columnconfigure(0, weight=1)
-
         summary_columns = ('product', 'total_qty', 'total_revenue')
         self.custom_summary_tree = ttk.Treeview(custom_summary_tree_frame, columns=summary_columns, show="headings", selectmode="none")
         self.custom_summary_tree.heading('product', text='Product')
@@ -206,18 +277,15 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.column('total_qty', anchor=tk.CENTER, width=100, stretch=False)
         self.custom_summary_tree.column('total_revenue', anchor=tk.E, width=120, stretch=False)
         self.custom_summary_tree.grid(row=0, column=0, sticky='nsew')
-
         summary_scrollbar = ttk.Scrollbar(custom_summary_tree_frame, orient="vertical", command=self.custom_summary_tree.yview)
         self.custom_summary_tree.configure(yscrollcommand=summary_scrollbar.set)
         summary_scrollbar.grid(row=0, column=1, sticky='ns')
 
-        # Custom Range Grand Total Label
         self.custom_range_grand_total_label = ttk.Label(self, text=f"Selected Range Total: {db_operations.CURRENCY_SYMBOL}0.00", font=("Arial", 10, "bold"))
-        self.custom_range_grand_total_label.grid(row=5, column=0, columnspan=2, sticky="e", padx=10, pady=(0,5)) # Row 5
+        self.custom_range_grand_total_label.grid(row=5, column=0, columnspan=2, sticky="e", padx=10, pady=(0,5))
 
-        # Action Buttons Frame
         action_button_frame = ttk.Frame(self)
-        action_button_frame.grid(row=6, column=0, columnspan=2, pady=10) # Row 6
+        action_button_frame.grid(row=6, column=0, columnspan=2, pady=10)
         delete_button = ttk.Button(action_button_frame, text="Delete Selected Sale", command=self.delete_selected_sale)
         delete_button.pack(side=tk.LEFT, padx=10)
         close_button = ttk.Button(action_button_frame, text="Close", command=self.destroy)
@@ -273,10 +341,8 @@ class SalesHistoryWindow(tk.Toplevel):
             start_date_dt_str = datetime.datetime.combine(start_date, datetime.time.min).isoformat()
             end_date_dt_str = (datetime.datetime.combine(end_date, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
 
-            # Fetch detailed summary data
             summary_data = db_operations.fetch_product_summary_by_date_range(start_date_dt_str, end_date_dt_str)
 
-            # Clear previous summary details
             for i in self.custom_summary_tree.get_children():
                 self.custom_summary_tree.delete(i)
 
@@ -290,7 +356,6 @@ class SalesHistoryWindow(tk.Toplevel):
             else:
                  self.custom_summary_tree.insert("", tk.END, values=("No sales in this period", "", ""))
 
-            # Update the grand total label for the custom range
             self.custom_range_grand_total_label.config(text=f"Selected Range Total: {db_operations.CURRENCY_SYMBOL}{grand_total:.2f}")
 
         except Exception as e:
@@ -305,22 +370,29 @@ class SalesHistoryWindow(tk.Toplevel):
             return
         try:
             sale_id = int(selected_item_id)
-            conn = sqlite3.connect(db_operations.DATABASE_FILENAME) # Need sqlite3 here
+            item_data = self.sales_tree.item(selected_item_id, 'values')
+            if not item_data or len(item_data) < 4:
+                 raise ValueError("Could not retrieve sale details from list.")
+
+            conn = sqlite3.connect(db_operations.DATABASE_FILENAME)
             cursor = conn.cursor()
             cursor.execute("SELECT SaleTimestamp, CustomerName, TotalAmount FROM Sales WHERE SaleID = ?", (sale_id,))
-            sale_data = cursor.fetchone()
+            sale_data_db = cursor.fetchone()
             conn.close()
-            if not sale_data: raise ValueError("Sale ID not found in database.")
-            timestamp_str = sale_data[0]
-            customer_name = sale_data[1]
-            total_amount = sale_data[2]
+            if not sale_data_db: raise ValueError("Sale ID not found in database.")
+
+            timestamp_str = sale_data_db[0]
+            customer_name = sale_data_db[1]
+            total_amount = sale_data_db[2]
             total_display = f"{db_operations.CURRENCY_SYMBOL}{total_amount:.2f}"
+
             items = db_operations.fetch_sale_items_from_db(sale_id)
             receipt = self.generate_detailed_receipt(sale_id, timestamp_str, customer_name, total_display, items)
             self.update_receipt_display(receipt)
-        except (IndexError, ValueError, TypeError, sqlite3.Error) as e: # Catch sqlite3.Error
+        except (IndexError, ValueError, TypeError, sqlite3.Error) as e:
             print(f"Error processing sale selection: {e}")
             self.update_receipt_display("Error retrieving sale details.")
+
 
     def delete_selected_sale(self):
         """Deletes the sale selected in the Treeview."""
@@ -333,7 +405,7 @@ class SalesHistoryWindow(tk.Toplevel):
             try:
                 values = self.sales_tree.item(selected_item_id, 'values')
                 confirm_msg = f"Are you sure you want to permanently delete Sale # {sale_id_to_delete} ({values[1]})?"
-            except tk.TclError:
+            except (tk.TclError, IndexError):
                 confirm_msg = f"Are you sure you want to permanently delete Sale # {sale_id_to_delete}?"
 
             confirmed = messagebox.askyesno("Confirm Deletion", confirm_msg, parent=self)
@@ -389,7 +461,7 @@ class CustomerListWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Manage Customers")
-        set_window_icon(self) # Set icon for this window
+        set_window_icon(self)
 
         win_width = 650
         win_height = 600
@@ -401,9 +473,9 @@ class CustomerListWindow(tk.Toplevel):
         self.grab_set()
 
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1) # Allow Treeview to expand
+        self.rowconfigure(1, weight=1)
         self.rowconfigure(0, weight=0)
-        self.rowconfigure(2, weight=0) # Buttons row
+        self.rowconfigure(2, weight=0)
 
         # --- Add/Edit Customer Form Frame ---
         form_frame = ttk.LabelFrame(self, text="Customer Details", padding="10")
@@ -441,29 +513,24 @@ class CustomerListWindow(tk.Toplevel):
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
 
-        # Define columns for the Treeview
         customer_columns = ('name', 'contact', 'address')
-        self.customer_tree = ttk.Treeview(list_frame, columns=customer_columns, show="headings", selectmode="browse") # Changed selectmode
+        self.customer_tree = ttk.Treeview(list_frame, columns=customer_columns, show="headings", selectmode="browse")
 
-        # Define headings
         self.customer_tree.heading('name', text='Name')
         self.customer_tree.heading('contact', text='Contact Number')
         self.customer_tree.heading('address', text='Address')
 
-        # Define column properties
         self.customer_tree.column('name', anchor=tk.W, width=150, stretch=True)
         self.customer_tree.column('contact', anchor=tk.W, width=100, stretch=False)
         self.customer_tree.column('address', anchor=tk.W, width=250, stretch=True)
 
         self.customer_tree.grid(row=0, column=0, sticky="nsew")
 
-        # Add scrollbar
         customer_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.customer_tree.yview)
         self.customer_tree.configure(yscrollcommand=customer_scrollbar.set)
         customer_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        # Bind selection event
-        self.customer_tree.bind("<<TreeviewSelect>>", self.on_customer_select) # Bind event
+        self.customer_tree.bind("<<TreeviewSelect>>", self.on_customer_select)
 
         # --- Bottom Buttons (Delete, Close) ---
         bottom_button_frame = ttk.Frame(self)
@@ -476,9 +543,9 @@ class CustomerListWindow(tk.Toplevel):
         close_button.pack(side=tk.LEFT, padx=10)
 
         # --- Initialize ---
-        self.selected_customer_id = None # Track selected customer ID
+        self.selected_customer_id = None
         self.populate_customer_list()
-        self.clear_form() # Start with empty fields
+        self.clear_form()
 
     def clear_form(self):
         """Clears the entry fields and selection."""
@@ -486,7 +553,6 @@ class CustomerListWindow(tk.Toplevel):
         self.name_var.set("")
         self.contact_var.set("")
         self.address_var.set("")
-        # Deselect item in treeview
         selection = self.customer_tree.selection()
         if selection:
             self.customer_tree.selection_remove(selection)
@@ -500,7 +566,6 @@ class CustomerListWindow(tk.Toplevel):
         item_data = self.customer_tree.item(selected_item_iid)
         values = item_data['values']
         if values:
-            # The iid *is* the CustomerID we stored when populating
             self.selected_customer_id = int(selected_item_iid)
             self.name_var.set(values[0])
             self.contact_var.set(values[1] if values[1] else "")
@@ -526,20 +591,18 @@ class CustomerListWindow(tk.Toplevel):
             print(f"Updating customer ID: {self.selected_customer_id}")
             if db_operations.update_customer_in_db(self.selected_customer_id, name, contact, address):
                 messagebox.showinfo("Success", f"Customer '{name}' updated successfully.", parent=self)
-                self.populate_customer_list() # Refresh list
-                self.clear_form() # Clear form after update
+                self.populate_customer_list()
+                self.clear_form()
             else:
-                # Error message shown by db function
                 pass
         else:
             # Add new customer
             print(f"Adding new customer: {name}")
             if db_operations.add_customer_to_db(name, contact, address):
                 messagebox.showinfo("Success", f"Customer '{name}' added successfully.", parent=self)
-                self.populate_customer_list() # Refresh list
-                self.clear_form() # Clear form after add
+                self.populate_customer_list()
+                self.clear_form()
             else:
-                # Error message shown by db function
                 pass
 
     def delete_selected_customer(self):
@@ -570,7 +633,6 @@ class CustomerListWindow(tk.Toplevel):
             cust_id, name, contact, address = customer_data
             display_contact = contact if contact is not None else ""
             display_address = address if address is not None else ""
-            # Use CustomerID as the item identifier (iid)
             self.customer_tree.insert("", tk.END, iid=cust_id, values=(name, display_contact, display_address))
 
 
@@ -685,12 +747,14 @@ class POSApp:
         self.root.title("SEASIDE Water Refilling Station - POS")
         app_width = 850
         app_height = 750
-        self.root.geometry(f"{app_width}x{app_height}")
+        # self.root.state('zoomed') # REMOVED: Don't start maximized
+        self.root.geometry(f"{app_width}x{app_height}") # Set initial size
         self.root.minsize(700, 600)
 
         # Use helper function to set icon for main window
         set_window_icon(self.root)
 
+        # Center the main window on startup
         center_window(self.root, app_width, app_height)
 
         db_operations.initialize_db()
@@ -707,19 +771,19 @@ class POSApp:
         self.root.rowconfigure(0, weight=1)
 
         # --- Create Frames ---
-        self.product_frame = ttk.Frame(root, padding="10")
-        self.sale_frame = ttk.Frame(root, padding="10")
+        self.product_frame = ttk.Frame(root, padding="5") # Reduced padding
+        self.sale_frame = ttk.Frame(root, padding="5")    # Reduced padding
         self.product_frame.grid(row=0, column=0, sticky="nsew")
         self.sale_frame.grid(row=0, column=1, sticky="nsew")
 
         # Configure product frame grid rows/columns for resizing
         self.product_frame.columnconfigure(0, weight=1)
         self.product_frame.columnconfigure(1, weight=0)
-        self.product_frame.rowconfigure(1, weight=1)
-        self.product_frame.rowconfigure(2, weight=0)
-        self.product_frame.rowconfigure(4, weight=1)
-        self.product_frame.rowconfigure(3, weight=0)
-        self.product_frame.rowconfigure(5, weight=0)
+        self.product_frame.rowconfigure(1, weight=1) # Product button area
+        self.product_frame.rowconfigure(2, weight=0) # Custom button row
+        self.product_frame.rowconfigure(4, weight=1) # Product management list area
+        self.product_frame.rowconfigure(3, weight=0) # Separator/Label fixed height
+        self.product_frame.rowconfigure(5, weight=0) # Buttons fixed height
 
         # Configure sale frame grid rows/columns for resizing
         self.sale_frame.columnconfigure(0, weight=1)
@@ -730,7 +794,7 @@ class POSApp:
         self.sale_frame.rowconfigure(3, weight=0)
 
         # --- Populate Product Frame (Sale Buttons) ---
-        ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 5), sticky='w')
+        ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w') # Reduced font/pady
         self.product_canvas = tk.Canvas(self.product_frame)
         product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
         self.scrollable_frame = ttk.Frame(self.product_canvas)
@@ -740,14 +804,14 @@ class POSApp:
         self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
         self.product_canvas.grid(row=1, column=0, sticky="nsew")
         product_scrollbar.grid(row=1, column=1, sticky="ns")
-        self.populate_product_buttons()
+        self.populate_product_buttons() # This now includes the Custom button
 
         # --- Product Management Section ---
-        ttk.Separator(self.product_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=15)
-        ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 14, "bold")).grid(row=3, column=0, columnspan=2, pady=(10, 5), sticky='w')
+        ttk.Separator(self.product_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10) # Reduced pady
+        ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold")).grid(row=3, column=0, columnspan=2, pady=(5, 2), sticky='w') # Reduced font/pady
 
         self.product_list_frame = ttk.Frame(self.product_frame)
-        self.product_list_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=5)
+        self.product_list_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=2) # Reduced pady
         self.product_list_frame.rowconfigure(0, weight=1)
         self.product_list_frame.columnconfigure(0, weight=1)
         self.product_listbox = tk.Listbox(self.product_list_frame, exportselection=False)
@@ -758,19 +822,19 @@ class POSApp:
         self.populate_product_management_list()
 
         product_mgmt_button_frame = ttk.Frame(self.product_frame)
-        product_mgmt_button_frame.grid(row=5, column=0, columnspan=2, pady=10, sticky='w')
+        product_mgmt_button_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky='w') # Reduced pady
         self.add_product_button = ttk.Button(product_mgmt_button_frame, text="Add New Product", command=self.prompt_new_item)
-        self.add_product_button.pack(side=tk.LEFT, padx=5)
+        self.add_product_button.pack(side=tk.LEFT, padx=2) # Reduced padx
         self.edit_product_button = ttk.Button(product_mgmt_button_frame, text="Edit Product", command=self.prompt_edit_item)
-        self.edit_product_button.pack(side=tk.LEFT, padx=5)
+        self.edit_product_button.pack(side=tk.LEFT, padx=2)
         self.remove_product_button = ttk.Button(product_mgmt_button_frame, text="Remove Product", command=self.remove_selected_product_permanently)
-        self.remove_product_button.pack(side=tk.LEFT, padx=5)
+        self.remove_product_button.pack(side=tk.LEFT, padx=2)
         self.view_customers_button = ttk.Button(product_mgmt_button_frame, text="Manage Customers", command=self.view_customers)
-        self.view_customers_button.pack(side=tk.LEFT, padx=5)
+        self.view_customers_button.pack(side=tk.LEFT, padx=2)
 
 
         # --- Populate Sale Frame ---
-        ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 16, "bold")).grid(row=0, column=0, columnspan=2, pady=10, sticky='w')
+        ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=2, pady=5, sticky='w') # Reduced font/pady
         columns = ("item", "quantity", "price", "subtotal")
         self.sale_tree = ttk.Treeview(self.sale_frame, columns=columns, show="headings", selectmode="browse")
         self.sale_tree.heading("item", text="Item")
@@ -781,14 +845,14 @@ class POSApp:
         self.sale_tree.column("quantity", anchor=tk.CENTER, width=40, stretch=False)
         self.sale_tree.column("price", anchor=tk.E, width=80, stretch=False)
         self.sale_tree.column("subtotal", anchor=tk.E, width=90, stretch=False)
-        self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=5)
+        self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2) # Reduced pady
         sale_scrollbar = ttk.Scrollbar(self.sale_frame, orient="vertical", command=self.sale_tree.yview)
         self.sale_tree.configure(yscrollcommand=sale_scrollbar.set)
-        sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=5)
+        sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2) # Reduced pady
 
         # --- Finalize Button and Total Label Frame (Row 2) ---
         finalize_total_frame = ttk.Frame(self.sale_frame)
-        finalize_total_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky="ew")
+        finalize_total_frame.grid(row=2, column=0, columnspan=2, pady=(5,2), sticky="ew") # Reduced pady
         finalize_total_frame.columnconfigure(0, weight=1)
         finalize_total_frame.columnconfigure(1, weight=0)
         finalize_total_frame.columnconfigure(2, weight=0)
@@ -802,19 +866,19 @@ class POSApp:
 
         # --- Other Sale Action Buttons Frame (Row 3) ---
         other_sale_actions_frame = ttk.Frame(self.sale_frame)
-        other_sale_actions_frame.grid(row=3, column=0, columnspan=2, pady=(0, 10), sticky="e")
+        other_sale_actions_frame.grid(row=3, column=0, columnspan=2, pady=(0, 5), sticky="e") # Reduced pady
 
         self.history_button = ttk.Button(other_sale_actions_frame, text="View History", command=self.view_sales_history)
-        self.history_button.pack(side=tk.RIGHT, padx=5)
+        self.history_button.pack(side=tk.RIGHT, padx=2) # Reduced padx
 
         self.clear_button = ttk.Button(other_sale_actions_frame, text="Clear Sale", command=self.clear_sale)
-        self.clear_button.pack(side=tk.RIGHT, padx=5)
+        self.clear_button.pack(side=tk.RIGHT, padx=2)
 
         self.remove_item_button = ttk.Button(other_sale_actions_frame, text="Remove Item", command=self.remove_selected_item_from_sale)
-        self.remove_item_button.pack(side=tk.RIGHT, padx=5)
+        self.remove_item_button.pack(side=tk.RIGHT, padx=2)
 
         self.decrease_qty_button = ttk.Button(other_sale_actions_frame, text="- Qty", command=self.decrease_item_quantity)
-        self.decrease_qty_button.pack(side=tk.RIGHT, padx=5)
+        self.decrease_qty_button.pack(side=tk.RIGHT, padx=2)
 
 
         self.update_sale_display()
@@ -856,16 +920,15 @@ class POSApp:
                 self.scrollable_frame,
                 text=btn_text,
                 command=lambda n=name: self.add_item(n),
-                # width=15 # Remove fixed width
             )
-            btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="ew") # Reduced padding slightly
+            btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="ew")
             col_num += 1
             if col_num >= max_cols:
                 col_num = 0
                 row_num += 1
         # Add Custom Price Button below the grid
         custom_button = ttk.Button(self.scrollable_frame, text="Custom Price Item", command=self.prompt_custom_item)
-        custom_button.grid(row=row_num + 1, column=0, columnspan=max_cols, pady=(10, 5), sticky='ew') # Adjusted padding
+        custom_button.grid(row=row_num + 1, column=0, columnspan=max_cols, pady=(10, 5), sticky='ew')
 
         self.scrollable_frame.update_idletasks()
         self.product_canvas.configure(scrollregion=self.product_canvas.bbox("all"))
