@@ -19,12 +19,12 @@ except ImportError:
     pass
 
 # --- Import GUI Class ---
-# This assumes gui_classes.py is in the same directory
+# This assumes gui_windows.py is in the same directory now
 try:
-    from gui_classes import POSApp
+    from gui_windows import POSApp
 except ImportError as e:
      messagebox.showerror("Import Error",
-                          f"Could not import necessary classes from gui_classes.py.\n"
+                          f"Could not import necessary classes from gui_windows.py.\n"
                           f"Ensure the file exists in the same directory.\nError: {e}")
      exit()
 except Exception as e: # Catch other potential errors during import

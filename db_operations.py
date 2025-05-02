@@ -24,7 +24,7 @@ def initialize_db():
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        # Enable foreign key constraints for this connection
+        # Enable foreign key constraints for this connection (good practice during init too)
         cursor.execute("PRAGMA foreign_keys = ON;")
 
         # Products Table
@@ -61,16 +61,16 @@ def initialize_db():
                 Quantity INTEGER NOT NULL CHECK (Quantity > 0),
                 PriceAtSale REAL NOT NULL,
                 Subtotal REAL NOT NULL,
-                FOREIGN KEY (SaleID) REFERENCES Sales (SaleID) ON DELETE CASCADE -- Add ON DELETE CASCADE
+                FOREIGN KEY (SaleID) REFERENCES Sales (SaleID) ON DELETE CASCADE -- Ensure ON DELETE CASCADE is present
             )
         ''')
-        # Customers Table (with new columns)
+        # Customers Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS Customers (
                 CustomerID INTEGER PRIMARY KEY AUTOINCREMENT,
                 CustomerName TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                ContactNumber TEXT, -- Added ContactNumber
-                Address TEXT        -- Added Address
+                ContactNumber TEXT,
+                Address TEXT
             )
         ''')
         # Add ContactNumber and Address columns if they don't exist (backward compatibility)
@@ -122,11 +122,12 @@ def initialize_db():
     except sqlite3.Error as e:
         messagebox.showerror("Database Error", f"Could not initialize database.\nError: {e}")
         print(f"Database initialization error: {e}")
-        raise # Reraise exception to potentially stop the app if DB init fails
+        raise
     finally:
         if conn:
             conn.close()
 
+# ... (other fetch/insert/update functions remain the same) ...
 def fetch_products_from_db():
     """Fetches all products from the SQLite database."""
     products = {}
@@ -274,13 +275,14 @@ def save_sale_items_records(sale_id, sale_details):
         if conn: conn.close()
 
 def fetch_sales_list_from_db():
-    """Fetches basic info (including customer name) for all sales."""
+    """Fetches basic info (including customer name) for all sales, ordered oldest first."""
     conn = None
     sales_list = []
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        cursor.execute("SELECT SaleID, SaleTimestamp, TotalAmount, CustomerName FROM Sales ORDER BY SaleTimestamp DESC")
+        # --- Changed ORDER BY to ASC ---
+        cursor.execute("SELECT SaleID, SaleTimestamp, TotalAmount, CustomerName FROM Sales ORDER BY SaleTimestamp ASC")
         sales_list = cursor.fetchall()
     except sqlite3.Error as e:
         messagebox.showerror("Database Error", f"Could not fetch sales list.\nError: {e}")
