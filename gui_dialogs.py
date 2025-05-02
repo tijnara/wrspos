@@ -85,7 +85,7 @@ class PriceInputDialog(tk.Toplevel):
         self.destroy()
 
 
-# --- Customer Selection Dialog Class ---
+# --- Customer Selection Dialog Class (Modified for Entry + Listbox) ---
 class CustomerSelectionDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -94,7 +94,7 @@ class CustomerSelectionDialog(tk.Toplevel):
         gui_utils.set_window_icon(self)
 
         dialog_width = 350
-        dialog_height = 150 # Reverted height
+        dialog_height = 250 # Increased height for listbox
         self.result = None
         # Use helper function to center relative to parent
         gui_utils.center_window(self, dialog_width, dialog_height)
@@ -102,56 +102,123 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
         self.columnconfigure(0, weight=1)
-        # Configure only 3 rows now
-        self.rowconfigure(0, weight=0)
-        self.rowconfigure(1, weight=0)
-        self.rowconfigure(2, weight=0)
+        # Configure rows: Label, Entry, Listbox (expandable), Buttons
+        self.rowconfigure(2, weight=1) # Allow listbox row to expand
 
-        ttk.Label(self, text="Select existing or enter new customer:").grid(row=0, column=0, pady=(10, 5), padx=10, sticky='w')
+        ttk.Label(self, text="Enter or select customer name:").grid(row=0, column=0, pady=(10, 2), padx=10, sticky='w')
 
-        # Fetch the latest list of customers each time dialog opens
-        self.customer_names_list = db_operations.fetch_distinct_customer_names()
+        # Fetch and store the full list initially
+        self.all_customer_names = db_operations.fetch_distinct_customer_names()
+        # Remove 'N/A' from suggestions if present, handle it separately
+        if 'N/A' in self.all_customer_names:
+            self.all_customer_names.remove('N/A')
+
         self.customer_var = tk.StringVar()
-        # Use Combobox again
-        self.customer_combobox = ttk.Combobox(self, textvariable=self.customer_var, values=self.customer_names_list)
-        self.customer_combobox.grid(row=1, column=0, pady=5, padx=10, sticky='ew')
-        self.customer_combobox.focus_set()
+        # Use Entry instead of Combobox
+        self.customer_entry = ttk.Entry(self, textvariable=self.customer_var, width=40)
+        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')
+        self.customer_entry.focus_set()
+
+        # Bind key release event to update suggestions
+        self.customer_entry.bind('<KeyRelease>', self.update_suggestions)
+
+        # Frame for Listbox and Scrollbar
+        list_frame = ttk.Frame(self)
+        # Place the list frame in row 2
+        list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')
+        list_frame.rowconfigure(0, weight=1)
+        list_frame.columnconfigure(0, weight=1)
+
+        # Listbox for suggestions
+        self.suggestion_listbox = tk.Listbox(list_frame, height=5, exportselection=False) # Limit initial height
+        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')
+        self.suggestion_listbox.bind('<Double-Button-1>', self.on_suggestion_select) # Bind double-click
+        self.suggestion_listbox.bind('<Return>', self.on_suggestion_select) # Bind Enter key
+
+        # Scrollbar for Listbox
+        list_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.suggestion_listbox.yview)
+        self.suggestion_listbox.configure(yscrollcommand=list_scrollbar.set)
+        list_scrollbar.grid(row=0, column=1, sticky='ns')
+
+        # Initially hide the listbox frame
+        list_frame.grid_remove()
+        self.list_frame = list_frame # Store reference to hide/show
 
         # Button frame
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=2, column=0, pady=10) # Buttons back on row 2
+        button_frame.grid(row=3, column=0, pady=10) # Buttons now on row 3
         ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_button.pack(side=tk.LEFT, padx=10)
 
-        self.bind('<Return>', lambda event=None: self.on_ok())
+        self.bind('<Return>', lambda event=None: self.on_ok()) # Global return still works for OK
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
         self.wait_window(self)
 
+    def update_suggestions(self, event=None):
+        """Filter customer list based on typed text and show in listbox."""
+        # --- FIX: Define typed_lower near the top ---
+        current_text = self.customer_var.get()
+        typed_lower = current_text.lower() # Define it here
+        cursor_pos = self.customer_entry.index(tk.INSERT) # Get cursor position from Entry
+
+        # Ignore navigation/modifier keys
+        if event and hasattr(event, 'keysym') and len(event.keysym) > 1 and event.keysym not in ('BackSpace', 'Delete'):
+             if not event.keysym.startswith('F'):
+                 return
+
+        self.suggestion_listbox.delete(0, tk.END) # Clear previous suggestions
+
+        if not current_text:
+            self.list_frame.grid_remove() # Hide if empty
+            return
+
+        # Filter names STARTING WITH the typed text
+        suggestions = [name for name in self.all_customer_names if name.lower().startswith(typed_lower)]
+
+        if suggestions:
+            for name in suggestions[:10]: # Limit to 10 suggestions
+                self.suggestion_listbox.insert(tk.END, name)
+            self.list_frame.grid() # Show the listbox frame
+        else:
+            self.list_frame.grid_remove() # Hide if no suggestions
+
+    def on_suggestion_select(self, event=None):
+        """Update entry field when a suggestion is clicked or Enter is pressed on listbox."""
+        selection_indices = self.suggestion_listbox.curselection()
+        if selection_indices:
+            selected_name = self.suggestion_listbox.get(selection_indices[0])
+            self.customer_var.set(selected_name) # Update the entry field text
+            self.list_frame.grid_remove() # Hide listbox after selection
+            self.customer_entry.icursor(tk.END) # Move cursor to end
+            self.customer_entry.focus_set() # Keep focus on entry
+
     def on_ok(self):
         """Handle OK button click. Add new customer if necessary."""
-        selected_name = self.customer_var.get().strip()
+        selected_name = self.customer_var.get().strip() # Get text from entry
         if not selected_name:
             self.result = "N/A"
         else:
             self.result = selected_name
             is_new = True
-            # Check against the *full* list fetched initially
-            for existing_name in self.customer_names_list:
+            # Fetch fresh list to double-check before adding
+            current_db_names = db_operations.fetch_distinct_customer_names()
+            for existing_name in current_db_names:
                 if selected_name.lower() == existing_name.lower():
                     is_new = False
                     break
             if is_new and selected_name != 'N/A':
-                print(f"Adding new customer from selection dialog: {selected_name}")
+                print(f"Adding new customer from dialog: {selected_name}")
                 if not db_operations.add_customer_to_db(selected_name, None, None):
-                    print(f"Warning: Could not add new customer '{selected_name}' via selection dialog.")
+                    print(f"Warning: Could not add new customer '{selected_name}' via dialog.")
                     pass
         self.destroy()
 
     def on_cancel(self):
         self.result = None
         self.destroy()
+
 
 # --- Custom Price Dialog Class ---
 class CustomPriceDialog(tk.Toplevel):
@@ -262,4 +329,3 @@ class CustomPriceDialog(tk.Toplevel):
     def on_cancel(self):
         self.result = None
         self.destroy()
-
