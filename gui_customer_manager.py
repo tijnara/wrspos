@@ -25,9 +25,10 @@ class CustomerListWindow(tk.Toplevel):
         self.grab_set()
 
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1) # Allow Treeview to expand
+        self.rowconfigure(2, weight=1) # Allow Treeview frame to expand (Row index updated)
         self.rowconfigure(0, weight=0) # Form frame fixed height
-        self.rowconfigure(2, weight=0) # Buttons fixed height
+        self.rowconfigure(1, weight=0) # Search frame fixed height
+        self.rowconfigure(3, weight=0) # Buttons fixed height
 
         # --- Add/Edit Customer Form Frame ---
         form_frame = ttk.LabelFrame(self, text="Customer Details", padding="10")
@@ -58,10 +59,23 @@ class CustomerListWindow(tk.Toplevel):
         self.clear_button = ttk.Button(form_button_frame, text="Clear Form", command=self.clear_form)
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
+        # --- Search Frame (New Row 1) ---
+        search_frame = ttk.Frame(self, padding=(10, 0, 10, 5))
+        search_frame.grid(row=1, column=0, sticky="ew")
+        search_frame.columnconfigure(1, weight=1) # Allow search entry to expand
 
-        # --- Customer List Frame (Using Treeview) ---
+        ttk.Label(search_frame, text="Search:").grid(row=0, column=0, padx=(0, 5))
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.grid(row=0, column=1, sticky="ew")
+        self.search_entry.bind("<Return>", self.filter_customer_list) # Bind Enter key
+
+        search_button = ttk.Button(search_frame, text="Search", command=self.filter_customer_list)
+        search_button.grid(row=0, column=2, padx=(5, 0))
+
+        # --- Customer List Frame (Using Treeview) (Now Row 2) ---
         list_frame = ttk.LabelFrame(self, text="Existing Customers", padding="10")
-        list_frame.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
+        list_frame.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
 
@@ -91,11 +105,10 @@ class CustomerListWindow(tk.Toplevel):
         # Bind selection event
         self.customer_tree.bind("<<TreeviewSelect>>", self.on_customer_select)
 
-        # --- Bottom Buttons (Delete, Close) ---
+        # --- Bottom Buttons (Delete, Close) (Now Row 3) ---
         bottom_button_frame = ttk.Frame(self)
-        bottom_button_frame.grid(row=2, column=0, pady=10)
+        bottom_button_frame.grid(row=3, column=0, pady=10)
 
-        # --- Add Export Button ---
         export_button = ttk.Button(bottom_button_frame, text="Export Customers", command=self.export_customers_to_csv)
         export_button.pack(side=tk.LEFT, padx=10)
 
@@ -107,8 +120,16 @@ class CustomerListWindow(tk.Toplevel):
 
         # --- Initialize ---
         self.selected_customer_id = None # Still track the actual DB ID internally
-        self.populate_customer_list()
+        self.populate_customer_list() # Initial population (no search term)
         self.clear_form()
+
+        # --- Bind Escape key ---
+        self.bind('<Escape>', lambda event=None: self.destroy())
+
+    def filter_customer_list(self, event=None):
+        """Filters the customer list based on the search entry."""
+        search_term = self.search_var.get()
+        self.populate_customer_list(search_term)
 
     def clear_form(self):
         """Clears the entry fields and selection."""
@@ -116,9 +137,11 @@ class CustomerListWindow(tk.Toplevel):
         self.name_var.set("")
         self.contact_var.set("")
         self.address_var.set("")
+        self.search_var.set("") # Clear search bar
         selection = self.customer_tree.selection()
         if selection:
             self.customer_tree.selection_remove(selection)
+        self.populate_customer_list() # Repopulate full list
         self.name_entry.focus_set()
 
     def on_customer_select(self, event=None):
@@ -174,20 +197,18 @@ class CustomerListWindow(tk.Toplevel):
             print(f"Updating customer ID: {self.selected_customer_id}")
             if db_operations.update_customer_in_db(self.selected_customer_id, name, contact, address):
                 messagebox.showinfo("Success", f"Customer '{name}' updated successfully.", parent=self)
-                self.populate_customer_list()
-                self.clear_form()
+                self.filter_customer_list() # Refresh list with current filter
+                self.clear_form() # Clear form fields
             else:
-                # Error message shown by db function (or handled above)
                 pass
         else:
             # Add new customer
             print(f"Adding new customer: {name}")
             if db_operations.add_customer_to_db(name, contact, address):
                 messagebox.showinfo("Success", f"Customer '{name}' added successfully.", parent=self)
-                self.populate_customer_list()
-                self.clear_form()
+                self.filter_customer_list() # Refresh list with current filter
+                self.clear_form() # Clear form fields
             else:
-                # Error message shown by db function (or handled above)
                 pass
 
     def delete_selected_customer(self):
@@ -203,29 +224,43 @@ class CustomerListWindow(tk.Toplevel):
             return
         if db_operations.delete_customer_from_db(self.selected_customer_id):
             messagebox.showinfo("Success", f"Customer '{customer_name}' deleted.", parent=self)
-            self.populate_customer_list()
-            self.clear_form()
+            self.filter_customer_list() # Refresh list with current filter
+            self.clear_form() # Clear form fields
         else:
              messagebox.showerror("Error", f"Failed to delete customer '{customer_name}'.", parent=self)
 
 
-    def populate_customer_list(self):
-        """Fetches and displays the list of customers in the Treeview."""
+    def populate_customer_list(self, search_term=""):
+        """Fetches and displays the list of customers, optionally filtering by search_term."""
         for i in self.customer_tree.get_children():
             self.customer_tree.delete(i)
-        all_customers = db_operations.fetch_all_customers()
-        # --- Calculate total number for reverse numbering ---
-        total_customers = len(all_customers)
+
+        all_customers = db_operations.fetch_all_customers() # Now sorted newest first by DB query
+        filtered_customers = []
+
+        # Filter results if search term is provided
+        if search_term:
+            term_lower = search_term.lower()
+            for cust_id, name, contact, address in all_customers:
+                contact_str = contact if contact else ""
+                address_str = address if address else ""
+                if (term_lower in name.lower() or
+                    term_lower in contact_str.lower() or
+                    term_lower in address_str.lower()):
+                    filtered_customers.append((cust_id, name, contact, address))
+        else:
+            filtered_customers = all_customers # Show all if no search term
+
+        # Populate the treeview with filtered results
+        # --- Use simple counter for newest first display ---
         seq_counter = 0
-        for customer_data in all_customers:
+        for customer_data in filtered_customers:
             seq_counter += 1
-            # --- Calculate reverse number ---
-            display_seq_no = total_customers - seq_counter + 1
             cust_id, name, contact, address = customer_data
             display_contact = contact if contact is not None else ""
             display_address = address if address is not None else ""
-            # --- Insert display_seq_no as the first value ---
-            self.customer_tree.insert("", tk.END, iid=cust_id, values=(display_seq_no, name, display_contact, display_address))
+            # --- Insert seq_counter (now representing newest first) ---
+            self.customer_tree.insert("", tk.END, iid=cust_id, values=(seq_counter, name, display_contact, display_address))
 
     def export_customers_to_csv(self):
         """Exports the currently displayed customer list to a CSV file."""
@@ -233,7 +268,6 @@ class CustomerListWindow(tk.Toplevel):
             messagebox.showwarning("No Data", "There are no customers to export.", parent=self)
             return
 
-        # Ask for save location
         file_path = filedialog.asksaveasfilename(
             parent=self,
             title="Save Customer List As",
@@ -241,19 +275,14 @@ class CustomerListWindow(tk.Toplevel):
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
 
-        if not file_path: # User cancelled
-            return
+        if not file_path: return
 
         try:
             with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
-
-                # Write header row using the Treeview column headings
                 headers = [self.customer_tree.heading(col)['text'] for col in self.customer_columns]
                 writer.writerow(headers)
-
-                # Write data rows
-                # Iterate in the order they appear in the treeview (which is how populate_customer_list inserts them)
+                # Iterate in display order
                 for item_id in self.customer_tree.get_children():
                     row_values = self.customer_tree.item(item_id)['values']
                     writer.writerow(row_values)

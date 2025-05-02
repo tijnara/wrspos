@@ -69,10 +69,11 @@ def initialize_db():
                 CustomerID INTEGER PRIMARY KEY AUTOINCREMENT,
                 CustomerName TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 ContactNumber TEXT,
-                Address TEXT
+                Address TEXT,
+                DateAdded TEXT DEFAULT CURRENT_TIMESTAMP -- Added DateAdded column
             )
         ''')
-        # Add ContactNumber and Address columns if they don't exist (backward compatibility)
+        # Add ContactNumber, Address, and DateAdded columns if they don't exist (backward compatibility)
         cursor.execute("PRAGMA table_info(Customers)")
         customer_columns = [info[1] for info in cursor.fetchall()]
         if 'ContactNumber' not in customer_columns:
@@ -83,6 +84,17 @@ def initialize_db():
             print("Adding Address column to Customers table...")
             cursor.execute("ALTER TABLE Customers ADD COLUMN Address TEXT")
             print("Address column added.")
+        # --- Add DateAdded column if missing ---
+        if 'DateAdded' not in customer_columns:
+            print("Adding DateAdded column to Customers table...")
+            try:
+                # Add column with default for new rows, existing rows get NULL initially
+                cursor.execute("ALTER TABLE Customers ADD COLUMN DateAdded TEXT DEFAULT CURRENT_TIMESTAMP")
+                # Optionally, update existing NULL rows to a specific date/time or now
+                # cursor.execute("UPDATE Customers SET DateAdded = ? WHERE DateAdded IS NULL", (datetime.datetime.now().isoformat(),))
+                print("DateAdded column added.")
+            except sqlite3.Error as e:
+                print(f"Error adding DateAdded column: {e}")
 
 
         # Populate Products if DB was just created
@@ -271,7 +283,6 @@ def save_sale_items_records(sale_id, sale_details):
     finally:
         if conn: conn.close()
 
-# --- MODIFIED: Added optional customer_name filter ---
 def fetch_sales_list_from_db(customer_name=None):
     """Fetches basic info for all sales, ordered oldest first.
        Optionally filters by customer name."""
@@ -333,21 +344,21 @@ def fetch_distinct_customer_names():
         print(f"Error fetching customer names: {e}")
     finally:
         if conn: conn.close()
-    # Ensure 'N/A' and 'All Customers' are handled appropriately elsewhere
     return names
 
 def fetch_all_customers():
-    """Fetches all customer details (ID, name, contact, address) from the Customers table."""
+    """Fetches all customer details (ID, name, contact, address), ordered newest first."""
     conn = None
     customers = []
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
+        # --- Changed ORDER BY to DateAdded DESC ---
         cursor.execute("""
             SELECT CustomerID, CustomerName, ContactNumber, Address
             FROM Customers
             WHERE CustomerName != 'N/A'
-            ORDER BY CustomerName COLLATE NOCASE
+            ORDER BY DateAdded DESC
         """)
         customers = cursor.fetchall()
     except sqlite3.Error as e:
@@ -359,7 +370,8 @@ def fetch_all_customers():
 
 
 def add_customer_to_db(name, contact=None, address=None):
-    """Adds a new customer to the Customers table if they don't exist."""
+    """Adds a new customer to the Customers table if they don't exist.
+       DateAdded will use the default CURRENT_TIMESTAMP."""
     if not name or name == 'N/A':
         print("Cannot add empty or 'N/A' customer name.")
         return False
@@ -368,6 +380,7 @@ def add_customer_to_db(name, contact=None, address=None):
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
+        # DateAdded uses default, no need to specify here
         cursor.execute("INSERT OR IGNORE INTO Customers (CustomerName, ContactNumber, Address) VALUES (?, ?, ?)",
                        (name, contact, address))
         conn.commit()
@@ -440,35 +453,65 @@ def delete_customer_from_db(customer_id):
     return success
 
 
-# --- MODIFIED: Added optional customer_name filter ---
+def fetch_sales_stats(start_dt_str, end_dt_exclusive_str, customer_name=None):
+    """
+    Fetches total revenue, total items sold, and number of sales within a date range.
+    Optionally filters by customer name.
+    Expects ISO format strings like 'YYYY-MM-DDTHH:MM:SS'.
+    Returns a tuple: (total_revenue, total_items, num_sales)
+    """
+    conn = None
+    total_revenue = 0.0
+    total_items = 0
+    num_sales = 0
+    try:
+        conn = sqlite3.connect(DATABASE_FILENAME)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+
+        base_sales_query = "FROM Sales WHERE SaleTimestamp >= ? AND SaleTimestamp < ?"
+        base_items_query = "FROM SaleItems JOIN Sales ON SaleItems.SaleID = Sales.SaleID WHERE Sales.SaleTimestamp >= ? AND Sales.SaleTimestamp < ?"
+        params_sales = [start_dt_str, end_dt_exclusive_str]
+        params_items = [start_dt_str, end_dt_exclusive_str]
+
+        customer_filter_sql = ""
+        if customer_name and customer_name != "All Customers":
+            customer_filter_sql = " AND CustomerName = ?"
+            params_sales.append(customer_name)
+            params_items.append(customer_name)
+
+        query_sales = f"SELECT COALESCE(SUM(TotalAmount), 0), COUNT(SaleID) {base_sales_query} {customer_filter_sql}"
+        cursor.execute(query_sales, params_sales)
+        result_sales = cursor.fetchone()
+        if result_sales:
+            total_revenue = result_sales[0] if result_sales[0] is not None else 0.0
+            num_sales = result_sales[1] if result_sales[1] is not None else 0
+
+        query_items = f"SELECT COALESCE(SUM(Quantity), 0) {base_items_query} {customer_filter_sql}"
+        cursor.execute(query_items, params_items)
+        result_items = cursor.fetchone()
+        if result_items:
+            total_items = result_items[0] if result_items[0] is not None else 0
+
+    except sqlite3.Error as e:
+        print(f"Error fetching sales stats ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name}): {e}")
+        return (0.0, 0, 0)
+    finally:
+        if conn: conn.close()
+
+    return (total_revenue, total_items, num_sales)
+
+
 def fetch_sales_summary(start_dt_str, end_dt_exclusive_str, customer_name=None):
     """
     Fetches the sum of TotalAmount for sales within a date range.
     Optionally filters by customer name.
     Expects ISO format strings like 'YYYY-MM-DDTHH:MM:SS'.
     """
-    conn = None
-    total = 0.0
-    try:
-        conn = sqlite3.connect(DATABASE_FILENAME)
-        cursor = conn.cursor()
-        query = "SELECT COALESCE(SUM(TotalAmount), 0) FROM Sales WHERE SaleTimestamp >= ? AND SaleTimestamp < ?"
-        params = [start_dt_str, end_dt_exclusive_str]
-        if customer_name and customer_name != "All Customers":
-            query += " AND CustomerName = ?"
-            params.append(customer_name)
+    total_revenue, _, _ = fetch_sales_stats(start_dt_str, end_dt_exclusive_str, customer_name)
+    return total_revenue
 
-        cursor.execute(query, params)
-        result = cursor.fetchone()
-        if result:
-            total = result[0]
-    except sqlite3.Error as e:
-        print(f"Error fetching sales summary ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name}): {e}")
-    finally:
-        if conn: conn.close()
-    return total
 
-# --- MODIFIED: Added optional customer_name filter ---
 def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str, customer_name=None):
     """
     Fetches aggregated product sales (total quantity, total revenue) within a date range.
@@ -480,6 +523,7 @@ def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str, cust
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
         query = """
             SELECT
                 si.ProductName,
