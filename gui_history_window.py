@@ -26,8 +26,8 @@ class SalesHistoryWindow(tk.Toplevel):
         self.title("Sales History & Summary")
         gui_utils.set_window_icon(self) # Use helper function
 
-        # --- Apply Styles (Moved below widget creation) ---
-        # self.apply_styles() # Moved down
+        # --- REMOVE Style Application ---
+        # self.apply_styles() # Removed
 
         win_width = 850
         win_height = 750 # May need adjustment for new labels
@@ -45,17 +45,19 @@ class SalesHistoryWindow(tk.Toplevel):
         self.rowconfigure(7, weight=0) # Buttons row
 
         # --- Widgets ---
-        # Use Header style for main titles (Style applied later)
+        # Remove style argument
         ttk.Label(self, text="Sales List", font=("Arial", 14, "bold")).grid(row=0, column=0, pady=10, padx=10, sticky="w")
         ttk.Label(self, text="Receipt Details", font=("Arial", 14, "bold")).grid(row=0, column=1, pady=10, padx=10, sticky="w")
 
         # Sales List Treeview
-        list_frame = ttk.Frame(self) # Style applied later
+        # Remove style argument
+        list_frame = ttk.Frame(self)
         list_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=5)
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
         self.sales_columns_display = ("sale_num", "receipt_no", "timestamp", "customer", "total") # Store for export headers
-        self.sales_tree = ttk.Treeview(list_frame, columns=self.sales_columns_display, show="headings", selectmode="browse") # Style applied later
+        # Remove style argument
+        self.sales_tree = ttk.Treeview(list_frame, columns=self.sales_columns_display, show="headings", selectmode="browse")
         self.sales_tree.heading("sale_num", text="Sales #")
         self.sales_tree.heading("receipt_no", text="Receipt No.")
         self.sales_tree.heading("timestamp", text="Timestamp")
@@ -73,81 +75,86 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)
 
         # Receipt Details Text Area
-        text_frame = ttk.Frame(self) # Style applied later
+        # Remove style argument
+        text_frame = ttk.Frame(self)
         text_frame.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=5)
         text_frame.rowconfigure(0, weight=1)
         text_frame.columnconfigure(0, weight=1)
-        # Style Text widget (limited options compared to ttk)
-        self.receipt_text = tk.Text(text_frame, wrap="word", state="disabled", height=10, width=40, font=("Courier New", 9), bg="#FFFFFF", fg="#000000", relief="sunken", borderwidth=1)
+        # Remove manual styling
+        self.receipt_text = tk.Text(text_frame, wrap="word", state="disabled", height=10, width=40, font=("Courier New", 9), relief="sunken", borderwidth=1)
         self.receipt_text.grid(row=0, column=0, sticky="nsew")
         receipt_text_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.receipt_text.yview)
         self.receipt_text.configure(yscrollcommand=receipt_text_scrollbar.set)
         receipt_text_scrollbar.grid(row=0, column=1, sticky="ns")
 
         # --- Filter Frame (New Row 2) ---
-        filter_frame = ttk.Frame(self, padding="5") # Style applied later
+        # Remove style argument
+        filter_frame = ttk.Frame(self, padding="5")
         filter_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(5,0))
         filter_frame.columnconfigure(1, weight=1) # Allow combobox to expand
-        ttk.Label(filter_frame, text="Filter by Customer:").grid(row=0, column=0, padx=(0, 5), sticky="w") # Style applied later
+        ttk.Label(filter_frame, text="Filter by Customer:").grid(row=0, column=0, padx=(0, 5), sticky="w") # Remove style
         # Populate customer list for filter
         customer_list = ["All Customers"] + sorted([c for c in db_operations.fetch_distinct_customer_names() if c != 'N/A'])
         self.filter_customer_var = tk.StringVar(value="All Customers")
         self.filter_customer_combo = ttk.Combobox(filter_frame, textvariable=self.filter_customer_var, values=customer_list, state="readonly", width=30)
         self.filter_customer_combo.grid(row=0, column=1, padx=5, sticky="ew")
         # Add a button to apply filters
-        filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.apply_filters) # Style applied later
+        filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.apply_filters) # Remove style
         filter_button.grid(row=0, column=2, padx=(10, 0))
 
 
         # Default Summaries (Now Row 3)
-        summary_frame = ttk.LabelFrame(self, text="Default Summaries", padding="5") # Style applied later
+        # Remove style argument
+        summary_frame = ttk.LabelFrame(self, text="Default Summaries", padding="5")
         summary_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
         summary_frame.columnconfigure(1, weight=1) # Make right column expand
         # Week
-        ttk.Label(summary_frame, text="This Week (Mon-Sun):").grid(row=0, column=0, sticky="w", padx=5, pady=1) # Style applied later
-        self.week_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Style applied later
+        ttk.Label(summary_frame, text="This Week (Mon-Sun):").grid(row=0, column=0, sticky="w", padx=5, pady=1) # Remove style
+        self.week_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
         self.week_total_label.grid(row=0, column=1, sticky="e", padx=5, pady=1)
-        self.week_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Style applied later
+        self.week_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Remove style
         self.week_items_label.grid(row=1, column=0, sticky="w", padx=5, pady=1)
-        self.week_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Style applied later
+        self.week_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
         self.week_avg_label.grid(row=1, column=1, sticky="e", padx=5, pady=1)
         # Month
-        ttk.Label(summary_frame, text="This Month:").grid(row=2, column=0, sticky="w", padx=5, pady=(5,1)) # Style applied later
-        self.month_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Style applied later
+        ttk.Label(summary_frame, text="This Month:").grid(row=2, column=0, sticky="w", padx=5, pady=(5,1)) # Remove style
+        self.month_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
         self.month_total_label.grid(row=2, column=1, sticky="e", padx=5, pady=(5,1))
-        self.month_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Style applied later
+        self.month_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Remove style
         self.month_items_label.grid(row=3, column=0, sticky="w", padx=5, pady=1)
-        self.month_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Style applied later
+        self.month_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
         self.month_avg_label.grid(row=3, column=1, sticky="e", padx=5, pady=1)
 
 
         # Custom Date Range Selection (Now Row 4)
-        custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10") # Style applied later
+        # Remove style argument
+        custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10")
         custom_entry_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
         custom_entry_frame.columnconfigure(1, weight=0)
         custom_entry_frame.columnconfigure(3, weight=0)
         custom_entry_frame.columnconfigure(4, weight=1)
-        ttk.Label(custom_entry_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w') # Style applied later
+        ttk.Label(custom_entry_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w') # Remove style
         # DateEntry styling might be limited or require specific tkcalendar knowledge
         self.start_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                           foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.start_date_entry.grid(row=0, column=1, padx=(0, 10), pady=5)
-        ttk.Label(custom_entry_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w') # Style applied later
+        ttk.Label(custom_entry_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w') # Remove style
         self.end_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                         foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.end_date_entry.grid(row=0, column=3, padx=(0, 10), pady=5)
         self.end_date_entry.set_date(datetime.date.today())
-        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary", command=self.update_custom_summary) # Style applied later
+        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary", command=self.update_custom_summary) # Remove style
         view_range_button.grid(row=0, column=4, padx=(10, 5), pady=5, sticky='e')
 
         # Custom Date Range Details Treeview (Now Row 5)
-        custom_summary_tree_frame = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5") # Style applied later
+        # Remove style argument
+        custom_summary_tree_frame = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5")
         custom_summary_tree_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
         custom_summary_tree_frame.rowconfigure(0, weight=1)
         custom_summary_tree_frame.columnconfigure(0, weight=1)
         self.summary_columns = ('product', 'total_qty', 'total_revenue') # Store for export
         # Remove style argument
-        self.custom_summary_tree = ttk.Treeview(custom_summary_tree_frame, columns=self.summary_columns, show="headings", selectmode="none")
+        self.custom_summary_tree = ttk.Treeview(custom_summary_tree_frame, columns=self.summary_columns, show="headings", selectmode="browse") # Changed selectmode
         self.custom_summary_tree.heading('product', text='Product')
         self.custom_summary_tree.heading('total_qty', text='Total Qty Sold')
         self.custom_summary_tree.heading('total_revenue', text='Total Revenue')
@@ -158,6 +165,8 @@ class SalesHistoryWindow(tk.Toplevel):
         summary_scrollbar = ttk.Scrollbar(custom_summary_tree_frame, orient="vertical", command=self.custom_summary_tree.yview)
         self.custom_summary_tree.configure(yscrollcommand=summary_scrollbar.set)
         summary_scrollbar.grid(row=0, column=1, sticky='ns')
+        # --- Bind double-click event ---
+        self.custom_summary_tree.bind("<Double-Button-1>", self.on_summary_item_select)
 
         # Custom Range Grand Total Label and Export Button (Now Row 6)
         # Remove style argument
@@ -448,4 +457,29 @@ class SalesHistoryWindow(tk.Toplevel):
         except Exception as e:
             messagebox.showerror("Export Failed", f"Could not export product summary.\nError: {e}", parent=self)
             print(f"Error exporting product summary: {e}")
+
+    def on_summary_item_select(self, event=None):
+        """Displays details of the selected item in the custom summary treeview."""
+        selected_item_id = self.custom_summary_tree.focus()
+        if not selected_item_id:
+            return # No item selected
+
+        item_values = self.custom_summary_tree.item(selected_item_id)['values']
+
+        # Check if it's the 'No sales' placeholder
+        if not item_values or item_values[0] == "No sales in this period":
+            return
+
+        try:
+            product_name = item_values[0]
+            total_qty = item_values[1]
+            total_revenue_str = item_values[2]
+            message = (
+                f"Product: {product_name}\n"
+                f"Total Quantity Sold: {total_qty}\n"
+                f"Total Revenue: {total_revenue_str}"
+            )
+            messagebox.showinfo("Product Summary Detail", message, parent=self)
+        except IndexError:
+            messagebox.showerror("Error", "Could not retrieve details for the selected summary item.", parent=self)
 
