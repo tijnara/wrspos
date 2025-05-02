@@ -24,8 +24,7 @@ def initialize_db():
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        # Enable foreign key constraints for this connection (good practice during init too)
-        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA foreign_keys = ON;") # Enable foreign keys
 
         # Products Table
         cursor.execute('''
@@ -61,7 +60,7 @@ def initialize_db():
                 Quantity INTEGER NOT NULL CHECK (Quantity > 0),
                 PriceAtSale REAL NOT NULL,
                 Subtotal REAL NOT NULL,
-                FOREIGN KEY (SaleID) REFERENCES Sales (SaleID) ON DELETE CASCADE -- Ensure ON DELETE CASCADE is present
+                FOREIGN KEY (SaleID) REFERENCES Sales (SaleID) ON DELETE CASCADE
             )
         ''')
         # Customers Table
@@ -103,7 +102,6 @@ def initialize_db():
                  print(f"Error inserting default products: {e}")
                  conn.rollback()
         else:
-             # Check if Products table is empty even if file exists
              cursor.execute("SELECT COUNT(*) FROM Products")
              count = cursor.fetchone()[0]
              if count == 0:
@@ -118,7 +116,7 @@ def initialize_db():
                      conn.rollback()
              else:
                  print(f"Database '{DATABASE_FILENAME}' and tables found.")
-        conn.commit() # Commit table creations/alterations
+        conn.commit()
     except sqlite3.Error as e:
         messagebox.showerror("Database Error", f"Could not initialize database.\nError: {e}")
         print(f"Database initialization error: {e}")
@@ -127,7 +125,6 @@ def initialize_db():
         if conn:
             conn.close()
 
-# ... (other fetch/insert/update functions remain the same) ...
 def fetch_products_from_db():
     """Fetches all products from the SQLite database."""
     products = {}
@@ -274,15 +271,22 @@ def save_sale_items_records(sale_id, sale_details):
     finally:
         if conn: conn.close()
 
-def fetch_sales_list_from_db():
-    """Fetches basic info (including customer name) for all sales, ordered oldest first."""
+# --- MODIFIED: Added optional customer_name filter ---
+def fetch_sales_list_from_db(customer_name=None):
+    """Fetches basic info for all sales, ordered oldest first.
+       Optionally filters by customer name."""
     conn = None
     sales_list = []
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        # --- Changed ORDER BY to ASC ---
-        cursor.execute("SELECT SaleID, SaleTimestamp, TotalAmount, CustomerName FROM Sales ORDER BY SaleTimestamp ASC")
+        query = "SELECT SaleID, SaleTimestamp, TotalAmount, CustomerName FROM Sales"
+        params = []
+        if customer_name and customer_name != "All Customers":
+            query += " WHERE CustomerName = ?"
+            params.append(customer_name)
+        query += " ORDER BY SaleTimestamp ASC" # Keep oldest first for numbering
+        cursor.execute(query, params)
         sales_list = cursor.fetchall()
     except sqlite3.Error as e:
         messagebox.showerror("Database Error", f"Could not fetch sales list.\nError: {e}")
@@ -329,11 +333,9 @@ def fetch_distinct_customer_names():
         print(f"Error fetching customer names: {e}")
     finally:
         if conn: conn.close()
-    if 'N/A' not in names:
-        names.insert(0, 'N/A') # Add N/A for selection dialog
+    # Ensure 'N/A' and 'All Customers' are handled appropriately elsewhere
     return names
 
-# --- New function to fetch all customer details ---
 def fetch_all_customers():
     """Fetches all customer details (ID, name, contact, address) from the Customers table."""
     conn = None
@@ -341,14 +343,13 @@ def fetch_all_customers():
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        # Select CustomerID as well
         cursor.execute("""
             SELECT CustomerID, CustomerName, ContactNumber, Address
             FROM Customers
             WHERE CustomerName != 'N/A'
             ORDER BY CustomerName COLLATE NOCASE
         """)
-        customers = cursor.fetchall() # List of tuples (id, name, contact, address)
+        customers = cursor.fetchall()
     except sqlite3.Error as e:
         print(f"Error fetching all customers: {e}")
         messagebox.showerror("Database Error", f"Could not fetch customer list.\nError: {e}")
@@ -377,18 +378,17 @@ def add_customer_to_db(name, contact=None, address=None):
              print(f"Failed to ensure customer '{name}' in database.")
     except sqlite3.Error as e:
         if conn: conn.rollback()
-        messagebox.showerror("Database Error", f"Could not add customer '{name}'.\nError: {e}", parent=None) # parent=None as could be called from dialog
+        messagebox.showerror("Database Error", f"Could not add customer '{name}'.\nError: {e}", parent=None)
         print(f"Error adding customer {name}: {e}")
     finally:
         if conn: conn.close()
     return success
 
-# --- New function to update customer details ---
 def update_customer_in_db(customer_id, name, contact, address):
     """Updates details for an existing customer."""
     conn = None
     success = False
-    if not name: # Basic validation
+    if not name:
         print("Customer name cannot be empty for update.")
         return False
     try:
@@ -405,8 +405,7 @@ def update_customer_in_db(customer_id, name, contact, address):
             print(f"Updated customer ID {customer_id} to Name: {name}")
         else:
             print(f"Customer ID {customer_id} not found for update.")
-            # No messagebox here, let calling function handle UI feedback
-    except sqlite3.IntegrityError: # Handle unique name constraint violation
+    except sqlite3.IntegrityError:
         if conn: conn.rollback()
         messagebox.showerror("Update Error", f"Could not update customer.\nAnother customer with the name '{name}' might already exist.", parent=None)
         print(f"Error updating customer ID {customer_id}: Name '{name}' likely already exists.")
@@ -418,7 +417,6 @@ def update_customer_in_db(customer_id, name, contact, address):
         if conn: conn.close()
     return success
 
-# --- New function to delete a customer ---
 def delete_customer_from_db(customer_id):
     """Deletes a customer from the Customers table."""
     conn = None
@@ -433,7 +431,6 @@ def delete_customer_from_db(customer_id):
             print(f"Deleted customer ID {customer_id} from database.")
         else:
             print(f"Customer ID {customer_id} not found for deletion.")
-            # No messagebox here, let calling function handle UI feedback
     except sqlite3.Error as e:
         if conn: conn.rollback()
         messagebox.showerror("Database Error", f"Could not delete customer ID {customer_id}.\nError: {e}", parent=None)
@@ -443,9 +440,11 @@ def delete_customer_from_db(customer_id):
     return success
 
 
-def fetch_sales_summary(start_dt_str, end_dt_exclusive_str):
+# --- MODIFIED: Added optional customer_name filter ---
+def fetch_sales_summary(start_dt_str, end_dt_exclusive_str, customer_name=None):
     """
     Fetches the sum of TotalAmount for sales within a date range.
+    Optionally filters by customer name.
     Expects ISO format strings like 'YYYY-MM-DDTHH:MM:SS'.
     """
     conn = None
@@ -453,25 +452,27 @@ def fetch_sales_summary(start_dt_str, end_dt_exclusive_str):
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
-        cursor.execute("""
-            SELECT COALESCE(SUM(TotalAmount), 0)
-            FROM Sales
-            WHERE SaleTimestamp >= ? AND SaleTimestamp < ?
-        """, (start_dt_str, end_dt_exclusive_str))
+        query = "SELECT COALESCE(SUM(TotalAmount), 0) FROM Sales WHERE SaleTimestamp >= ? AND SaleTimestamp < ?"
+        params = [start_dt_str, end_dt_exclusive_str]
+        if customer_name and customer_name != "All Customers":
+            query += " AND CustomerName = ?"
+            params.append(customer_name)
+
+        cursor.execute(query, params)
         result = cursor.fetchone()
         if result:
             total = result[0]
     except sqlite3.Error as e:
-        print(f"Error fetching sales summary ({start_dt_str} to {end_dt_exclusive_str}): {e}")
+        print(f"Error fetching sales summary ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name}): {e}")
     finally:
         if conn: conn.close()
     return total
 
-# --- New Function for Detailed Product Summary by Date ---
-def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str):
+# --- MODIFIED: Added optional customer_name filter ---
+def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str, customer_name=None):
     """
     Fetches aggregated product sales (total quantity, total revenue) within a date range.
+    Optionally filters by customer name.
     Expects ISO format strings like 'YYYY-MM-DDTHH:MM:SS'.
     """
     conn = None
@@ -479,8 +480,7 @@ def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str):
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
-        cursor.execute("""
+        query = """
             SELECT
                 si.ProductName,
                 SUM(si.Quantity) as TotalQuantity,
@@ -488,12 +488,20 @@ def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str):
             FROM SaleItems si
             JOIN Sales s ON si.SaleID = s.SaleID
             WHERE s.SaleTimestamp >= ? AND s.SaleTimestamp < ?
+        """
+        params = [start_dt_str, end_dt_exclusive_str]
+        if customer_name and customer_name != "All Customers":
+            query += " AND s.CustomerName = ?"
+            params.append(customer_name)
+
+        query += """
             GROUP BY si.ProductName
             ORDER BY si.ProductName COLLATE NOCASE
-        """, (start_dt_str, end_dt_exclusive_str))
-        summary_data = cursor.fetchall() # List of tuples (Name, TotalQty, TotalRevenue)
+        """
+        cursor.execute(query, params)
+        summary_data = cursor.fetchall()
     except sqlite3.Error as e:
-        print(f"Error fetching product summary ({start_dt_str} to {end_dt_exclusive_str}): {e}")
+        print(f"Error fetching product summary ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name}): {e}")
         messagebox.showerror("Database Error", f"Could not fetch product summary.\nError: {e}")
     finally:
         if conn: conn.close()
@@ -507,9 +515,7 @@ def delete_sale_from_db(sale_id):
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
-        # --- Ensure Foreign Keys are ON for this connection ---
         cursor.execute("PRAGMA foreign_keys = ON;")
-        # Delete the Sale record (ON DELETE CASCADE should handle SaleItems)
         cursor.execute("DELETE FROM Sales WHERE SaleID = ?", (sale_id,))
         conn.commit()
         if cursor.rowcount > 0:
@@ -520,7 +526,6 @@ def delete_sale_from_db(sale_id):
     except sqlite3.Error as e:
         if conn: conn.rollback()
         print(f"Error deleting Sale ID {sale_id}: {e}")
-        # Let the calling function display the messagebox
     finally:
         if conn: conn.close()
     return success

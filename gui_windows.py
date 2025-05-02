@@ -2,9 +2,11 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from tkinter import simpledialog
+from tkinter import filedialog # Added for file dialogs
 import datetime
 import os
 import sqlite3 # Keep for error catching if needed
+import shutil # Added for file copying
 
 # --- External Libraries ---
 from dateutil.relativedelta import relativedelta, MO, SU
@@ -48,18 +50,29 @@ class POSApp:
         self.total_amount = 0.0
         self.history_window = None
         self.customer_list_window = None
+        self.first_product_button = None # To store reference for F1 focus
+        self.status_bar_job = None # To store the .after job ID
+
+        # --- Create Menu Bar ---
+        self.create_menu()
 
         # --- Configure Main Layout ---
-        # --- CHANGE: Set both columns to equal weight ---
         self.root.columnconfigure(0, weight=1) # Product frame
-        self.root.columnconfigure(1, weight=1) # Sale frame (was 2)
-        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(1, weight=1) # Sale frame
+        self.root.rowconfigure(0, weight=1) # Main content row
+        self.root.rowconfigure(1, weight=0) # Status bar row (fixed height)
 
         # --- Create Frames ---
-        self.product_frame = ttk.Frame(root, padding="5") # Reduced padding
-        self.sale_frame = ttk.Frame(root, padding="5")    # Reduced padding
+        self.product_frame = ttk.Frame(root, padding="5")
+        self.sale_frame = ttk.Frame(root, padding="5")
         self.product_frame.grid(row=0, column=0, sticky="nsew")
         self.sale_frame.grid(row=0, column=1, sticky="nsew")
+
+        # --- Status Bar ---
+        self.status_var = tk.StringVar()
+        self.status_bar = ttk.Label(root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2))
+        self.status_bar.grid(row=1, column=0, columnspan=2, sticky='ew')
+        self.show_status("Ready", duration=None) # Initial status
 
         # Configure product frame grid rows/columns for resizing
         self.product_frame.columnconfigure(0, weight=1)
@@ -79,25 +92,24 @@ class POSApp:
         self.sale_frame.rowconfigure(3, weight=0)
 
         # --- Populate Product Frame (Sale Buttons) ---
-        ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w') # Reduced font/pady
+        ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w')
         self.product_canvas = tk.Canvas(self.product_frame)
         product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
         self.scrollable_frame = ttk.Frame(self.product_canvas)
         self.product_canvas.bind('<Configure>', lambda e: self.product_canvas.configure(scrollregion=self.product_canvas.bbox("all")))
         self.product_canvas_window = self.product_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        # --- Remove binding that caused re-layout on resize ---
-        # self.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame)
+        # self.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame) # Removed re-layout binding
         self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
         self.product_canvas.grid(row=1, column=0, sticky="nsew")
         product_scrollbar.grid(row=1, column=1, sticky="ns")
-        self.populate_product_buttons() # Initial population
+        self.populate_product_buttons()
 
         # --- Product Management Section ---
-        ttk.Separator(self.product_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10) # Reduced pady
-        ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold")).grid(row=3, column=0, columnspan=2, pady=(5, 2), sticky='w') # Reduced font/pady
+        ttk.Separator(self.product_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
+        ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold")).grid(row=3, column=0, columnspan=2, pady=(5, 2), sticky='w')
 
         self.product_list_frame = ttk.Frame(self.product_frame)
-        self.product_list_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=2) # Reduced pady
+        self.product_list_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=2)
         self.product_list_frame.rowconfigure(0, weight=1)
         self.product_list_frame.columnconfigure(0, weight=1)
         self.product_listbox = tk.Listbox(self.product_list_frame, exportselection=False)
@@ -108,9 +120,9 @@ class POSApp:
         self.populate_product_management_list()
 
         product_mgmt_button_frame = ttk.Frame(self.product_frame)
-        product_mgmt_button_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky='w') # Reduced pady
+        product_mgmt_button_frame.grid(row=5, column=0, columnspan=2, pady=5, sticky='w')
         self.add_product_button = ttk.Button(product_mgmt_button_frame, text="Add New Product", command=self.prompt_new_item)
-        self.add_product_button.pack(side=tk.LEFT, padx=2) # Reduced padx
+        self.add_product_button.pack(side=tk.LEFT, padx=2)
         self.edit_product_button = ttk.Button(product_mgmt_button_frame, text="Edit Product", command=self.prompt_edit_item)
         self.edit_product_button.pack(side=tk.LEFT, padx=2)
         self.remove_product_button = ttk.Button(product_mgmt_button_frame, text="Remove Product", command=self.remove_selected_product_permanently)
@@ -120,7 +132,7 @@ class POSApp:
 
 
         # --- Populate Sale Frame ---
-        ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=2, pady=5, sticky='w') # Reduced font/pady
+        ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=2, pady=5, sticky='w')
         columns = ("item", "quantity", "price", "subtotal")
         self.sale_tree = ttk.Treeview(self.sale_frame, columns=columns, show="headings", selectmode="browse")
         self.sale_tree.heading("item", text="Item")
@@ -131,19 +143,19 @@ class POSApp:
         self.sale_tree.column("quantity", anchor=tk.CENTER, width=40, stretch=False)
         self.sale_tree.column("price", anchor=tk.E, width=80, stretch=False)
         self.sale_tree.column("subtotal", anchor=tk.E, width=90, stretch=False)
-        self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2) # Reduced pady
+        self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2)
         sale_scrollbar = ttk.Scrollbar(self.sale_frame, orient="vertical", command=self.sale_tree.yview)
         self.sale_tree.configure(yscrollcommand=sale_scrollbar.set)
-        sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2) # Reduced pady
+        sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2)
 
         # --- Finalize Button and Total Label Frame (Row 2) ---
         finalize_total_frame = ttk.Frame(self.sale_frame)
-        finalize_total_frame.grid(row=2, column=0, columnspan=2, pady=(5,2), sticky="ew") # Reduced pady
+        finalize_total_frame.grid(row=2, column=0, columnspan=2, pady=(5,2), sticky="ew")
         finalize_total_frame.columnconfigure(0, weight=1)
         finalize_total_frame.columnconfigure(1, weight=0)
         finalize_total_frame.columnconfigure(2, weight=0)
 
-        self.finalize_button = ttk.Button(finalize_total_frame, text="Finalize Sale", command=self.finalize_sale)
+        self.finalize_button = ttk.Button(finalize_total_frame, text="Finalize Sale (Ctrl+F)", command=self.finalize_sale)
         self.finalize_button.grid(row=0, column=1, padx=(5, 10), sticky="e")
 
         self.total_label = ttk.Label(finalize_total_frame, text=f"{gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 14, "bold"))
@@ -152,10 +164,10 @@ class POSApp:
 
         # --- Other Sale Action Buttons Frame (Row 3) ---
         other_sale_actions_frame = ttk.Frame(self.sale_frame)
-        other_sale_actions_frame.grid(row=3, column=0, columnspan=2, pady=(0, 5), sticky="e") # Reduced pady
+        other_sale_actions_frame.grid(row=3, column=0, columnspan=2, pady=(0, 5), sticky="e")
 
-        self.history_button = ttk.Button(other_sale_actions_frame, text="View History", command=self.view_sales_history)
-        self.history_button.pack(side=tk.RIGHT, padx=2) # Reduced padx
+        self.history_button = ttk.Button(other_sale_actions_frame, text="View History (Ctrl+H)", command=self.view_sales_history)
+        self.history_button.pack(side=tk.RIGHT, padx=2)
 
         self.clear_button = ttk.Button(other_sale_actions_frame, text="Clear Sale", command=self.clear_sale)
         self.clear_button.pack(side=tk.RIGHT, padx=2)
@@ -169,10 +181,138 @@ class POSApp:
 
         self.update_sale_display()
 
+        # --- Bind Keyboard Shortcuts ---
+        self.bind_shortcuts()
+
+    def show_status(self, message, duration=3000):
+        """Displays a message in the status bar for a specified duration."""
+        self.status_var.set(message)
+        # Cancel previous job if it exists
+        if self.status_bar_job:
+            self.root.after_cancel(self.status_bar_job)
+            self.status_bar_job = None
+        # Schedule new job to clear status (unless duration is None)
+        if duration:
+            self.status_bar_job = self.root.after(duration, self.clear_status)
+
+    def clear_status(self):
+        """Clears the status bar."""
+        self.status_var.set("")
+        self.status_bar_job = None
+
+    def create_menu(self):
+        """Creates the main menu bar."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+
+        # File Menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Backup Database...", command=self.backup_database)
+        file_menu.add_command(label="Restore Database...", command=self.restore_database)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+
+        # Add other menus here if needed (e.g., View, Help)
+
+    def bind_shortcuts(self):
+        """Binds keyboard shortcuts to application functions."""
+        self.root.bind('<F1>', self.focus_first_product)
+        self.root.bind('<Control-f>', lambda event=None: self.finalize_sale())
+        self.root.bind('<Control-h>', lambda event=None: self.view_sales_history())
+        # Note: Escape key bindings are handled within individual dialogs/windows
+
+    def focus_first_product(self, event=None):
+        """Sets focus to the first product button."""
+        if self.first_product_button and self.first_product_button.winfo_exists():
+            self.first_product_button.focus_set()
+            self.show_status("Focused first product button (F1)", 2000)
+        else:
+            self.show_status("No product buttons found to focus.", 2000)
+
+    def backup_database(self):
+        """Creates a backup copy of the database file."""
+        source_db = db_operations.DATABASE_FILENAME
+        if not os.path.exists(source_db):
+            messagebox.showerror("Backup Error", f"Database file '{source_db}' not found.", parent=self.root)
+            self.show_status(f"Backup failed: Database file '{source_db}' not found.", 5000)
+            return
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        suggested_filename = f"pos_backup_{timestamp}.db"
+
+        backup_path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="Save Database Backup As",
+            initialfile=suggested_filename,
+            defaultextension=".db",
+            filetypes=[("Database files", "*.db"), ("All files", "*.*")]
+        )
+
+        if not backup_path: # User cancelled
+            self.show_status("Backup cancelled.", 3000)
+            return
+
+        try:
+            shutil.copy2(source_db, backup_path)
+            # Use status bar instead of messagebox
+            self.show_status(f"Database backed up successfully to {os.path.basename(backup_path)}", 5000)
+            print(f"Database backed up to {backup_path}")
+        except Exception as e:
+            messagebox.showerror("Backup Failed", f"Could not create backup.\nError: {e}", parent=self.root)
+            self.show_status(f"Backup failed: {e}", 5000)
+            print(f"Error during backup: {e}")
+
+    def restore_database(self):
+        """Restores the database from a backup file."""
+        target_db = db_operations.DATABASE_FILENAME
+        warning_msg = (
+            "WARNING: Restoring a database will OVERWRITE the current data!\n\n"
+            "This action cannot be undone.\n\n"
+            "The application will close after restoring. You must restart it manually.\n\n"
+            "Are you absolutely sure you want to proceed?"
+        )
+        if not messagebox.askyesno("Confirm Restore", warning_msg, icon='warning', parent=self.root):
+            self.show_status("Restore cancelled.", 3000)
+            return
+
+        backup_path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Select Database Backup to Restore",
+            filetypes=[("Database files", "*.db"), ("All files", "*.*")]
+        )
+
+        if not backup_path: # User cancelled
+            self.show_status("Restore cancelled.", 3000)
+            return
+
+        if not os.path.exists(backup_path):
+            messagebox.showerror("Restore Error", "Selected backup file does not exist.", parent=self.root)
+            self.show_status("Restore failed: Backup file not found.", 5000)
+            return
+        if not backup_path.lower().endswith(".db"):
+             if not messagebox.askyesno("Confirm File Type", "The selected file doesn't have a .db extension. Are you sure it's a valid database backup?", icon='warning', parent=self.root):
+                 self.show_status("Restore cancelled.", 3000)
+                 return
+
+        try:
+            print("Attempting restore. Ensure all secondary windows (History, Customers) are closed.")
+            shutil.copy2(backup_path, target_db)
+            # Show info and then destroy the window
+            messagebox.showinfo("Restore Successful",
+                                f"Database restored successfully from:\n{os.path.basename(backup_path)}\n\n"
+                                "The application will now close. Please restart it.",
+                                parent=self.root)
+            print(f"Database restored from {backup_path}. Application closing.")
+            self.root.destroy()
+        except Exception as e:
+            messagebox.showerror("Restore Failed", f"Could not restore database.\nError: {e}", parent=self.root)
+            self.show_status(f"Restore failed: {e}", 5000)
+            print(f"Error during restore: {e}")
+
     # --- Helper for Scrollable Frame Resizing ---
     def _configure_scrollable_frame(self, event):
         """Reset the scroll region to encompass the inner frame"""
-        # --- Removed re-population on resize ---
         self.product_canvas.configure(scrollregion=self.product_canvas.bbox("all"))
         self.product_canvas.itemconfig(self.product_canvas_window, width=event.width)
 
@@ -191,17 +331,17 @@ class POSApp:
     # --- Product Handling Methods ---
     def populate_product_buttons(self, available_width=None): # Keep parameter for potential future use
         """Clears and repopulates the product buttons with a fixed 4-column layout."""
+        self.first_product_button = None # Reset reference
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
-        # --- Use fixed 4 columns ---
         max_cols = 4
         for i in range(max_cols):
             self.scrollable_frame.columnconfigure(i, weight=1)
 
         row_num, col_num = 0, 0
         sorted_products = sorted(self.products.items())
-        for name, price in sorted_products:
+        for idx, (name, price) in enumerate(sorted_products):
             btn_text = f"{name}\n({gui_utils.CURRENCY_SYMBOL}{price:.2f})"
             btn = ttk.Button(
                 self.scrollable_frame,
@@ -209,12 +349,14 @@ class POSApp:
                 command=lambda n=name: self.add_item(n),
             )
             btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="ew")
+            if idx == 0:
+                self.first_product_button = btn
+
             col_num += 1
             if col_num >= max_cols:
                 col_num = 0
                 row_num += 1
 
-        # Add Custom Price Button below the grid
         custom_button = ttk.Button(self.scrollable_frame, text="Custom Price Item", command=self.prompt_custom_item)
         custom_button.grid(row=row_num + 1, column=0, columnspan=max_cols, pady=(10, 5), sticky='ew')
 
@@ -233,7 +375,7 @@ class POSApp:
         """Helper method to get the name and price of the selected product in the listbox."""
         selection_indices = self.product_listbox.curselection()
         if not selection_indices:
-            messagebox.showwarning("No Selection", "Please select a product from the 'Manage Products' list first.")
+            messagebox.showwarning("No Selection", "Please select a product from the 'Manage Products' list first.", parent=self.root)
             return None, None
         selected_index = selection_indices[0]
         selected_text = self.product_listbox.get(selected_index)
@@ -244,7 +386,7 @@ class POSApp:
             price = float(price_str)
             return product_name, price
         except Exception as e:
-             messagebox.showerror("Error", f"Could not parse selected product details: {e}")
+             messagebox.showerror("Error", f"Could not parse selected product details: {e}", parent=self.root)
              print(f"Error parsing listbox text '{selected_text}': {e}")
              return None, None
 
@@ -256,21 +398,19 @@ class POSApp:
              messagebox.showwarning("Product Exists", f"Product '{name}' already exists.", parent=self.root)
              return
 
-        # Use custom dialog for price
         price_dialog = PriceInputDialog(self.root, "New Product Price", f"Enter price for {name}:")
-        price = price_dialog.result # Get result from custom dialog
+        price = price_dialog.result
 
-        if price is not None: # Check if dialog wasn't cancelled
+        if price is not None:
             try:
-                # Price is already validated as float by the dialog
                 if db_operations.insert_product_to_db(name, price):
                     self.products[name] = price
-                    self.populate_product_buttons() # Re-populate with fixed layout
+                    self.populate_product_buttons()
                     self.populate_product_management_list()
-                    print(f"Added new product to DB and UI: {name} - {gui_utils.CURRENCY_SYMBOL}{price:.2f}")
-                    messagebox.showinfo("Success", f"Product '{name}' added successfully.", parent=self.root)
-            except Exception as e: # Catch potential DB errors
+                    self.show_status(f"Product '{name}' added successfully.", 3000) # Status bar
+            except Exception as e:
                  messagebox.showerror("Database Error", f"Could not save product to database.\n{e}", parent=self.root)
+                 self.show_status(f"Failed to add product '{name}'.", 5000)
 
 
     def prompt_edit_item(self):
@@ -280,13 +420,11 @@ class POSApp:
         new_name = simpledialog.askstring("Edit Product", "Enter new product name:", initialvalue=original_name, parent=self.root)
         if not new_name: return
 
-        # Use custom dialog for price
         price_dialog = PriceInputDialog(self.root, "Edit Product Price", f"Enter new price for {new_name}:", initialvalue=f"{original_price:.2f}")
-        new_price = price_dialog.result # Get result from custom dialog
+        new_price = price_dialog.result
 
-        if new_price is not None: # Check if dialog wasn't cancelled
+        if new_price is not None:
             try:
-                # Price is already validated as float by the dialog
                 if new_name != original_name and new_name in self.products:
                      messagebox.showerror("Edit Error", f"Cannot rename to '{new_name}'.\nA product with that name already exists.", parent=self.root)
                      return
@@ -294,11 +432,12 @@ class POSApp:
                     if original_name in self.products:
                          del self.products[original_name]
                     self.products[new_name] = new_price
-                    self.populate_product_buttons() # Re-populate with fixed layout
+                    self.populate_product_buttons()
                     self.populate_product_management_list()
-                    messagebox.showinfo("Success", f"Product '{original_name}' updated successfully.", parent=self.root)
-            except Exception as e: # Catch potential DB errors
+                    self.show_status(f"Product '{original_name}' updated successfully.", 3000) # Status bar
+            except Exception as e:
                  messagebox.showerror("Database Error", f"Could not update product in database.\n{e}", parent=self.root)
+                 self.show_status(f"Failed to update product '{original_name}'.", 5000)
 
 
     def remove_selected_product_permanently(self):
@@ -308,36 +447,41 @@ class POSApp:
         confirmed = messagebox.askyesno("Confirm Permanent Deletion",
                                         f"Are you sure you want to permanently delete '{product_name}'?\n"
                                         "This cannot be undone.", parent=self.root)
-        if not confirmed: return
+        if not confirmed:
+            self.show_status("Product deletion cancelled.", 2000)
+            return
         if db_operations.delete_product_from_db(product_name):
             if product_name in self.products:
                  del self.products[product_name]
-            self.populate_product_buttons() # Re-populate with fixed layout
+            self.populate_product_buttons()
             self.populate_product_management_list()
-            messagebox.showinfo("Success", f"Product '{product_name}' permanently deleted.", parent=self.root)
+            self.show_status(f"Product '{product_name}' permanently deleted.", 3000) # Status bar
+        else:
+            # Error likely shown by db function, but add status too
+            self.show_status(f"Failed to delete product '{product_name}'.", 5000)
+
 
     # --- Sale Handling Methods ---
     def add_item(self, name, override_price=None, quantity_to_add=1):
         """Adds an item to the current sale or increments its quantity."""
         if override_price is not None:
-            price_to_use = override_price
-            print(f"Using override price for {name}: {price_to_use}")
+            current_price = override_price
+            print(f"Using override price for {name}: {current_price}")
         elif name in self.products:
-             price_to_use = self.products[name]
+             current_price = self.products[name]
         else:
              messagebox.showerror("Error", f"Product '{name}' not found in product list.")
+             self.show_status(f"Error: Product '{name}' not found.", 5000)
              return
 
-        if name in self.current_sale:
-            if override_price is not None:
-                 if self.current_sale[name]['price'] != override_price:
-                     print(f"Updating price for {name} in current sale to override price: {override_price}")
-                 self.current_sale[name]['price'] = override_price
-            self.current_sale[name]['quantity'] += quantity_to_add
-        else:
-            self.current_sale[name] = {'price': price_to_use, 'quantity': quantity_to_add}
+        item_key = f"{name}__{current_price:.2f}" # Use name and price as key for custom prices
 
-        print(f"Added/Updated {name}. Current sale: {self.current_sale}")
+        if item_key in self.current_sale:
+             self.current_sale[item_key]['quantity'] += quantity_to_add
+        else:
+            self.current_sale[item_key] = {'name': name, 'price': current_price, 'quantity': quantity_to_add}
+
+        self.show_status(f"Added {quantity_to_add} x {name}", 2000)
         self.update_sale_display()
 
     def prompt_custom_item(self):
@@ -348,91 +492,78 @@ class POSApp:
             product_name, custom_price, quantity = result
             if product_name and custom_price is not None and quantity is not None:
                 self.add_item(product_name, override_price=custom_price, quantity_to_add=quantity)
-            elif product_name:
-                 if custom_price is None:
-                     messagebox.showwarning("Invalid Price", "Please enter a valid custom price.", parent=self.root)
-                 if quantity is None:
-                      messagebox.showwarning("Invalid Quantity", "Please enter a valid quantity.", parent=self.root)
+            # No else needed, dialog handles validation
 
 
     def decrease_item_quantity(self):
         """Decreases the quantity of the selected item in the sale tree."""
-        selected_item_id = self.sale_tree.focus()
+        selected_item_id = self.sale_tree.focus() # This is the item_key
         if not selected_item_id:
             messagebox.showwarning("No Selection", "Please select an item from the 'Current Sale' list to decrease quantity.")
             return
-        try:
-            item_values = self.sale_tree.item(selected_item_id, 'values')
-            item_name = item_values[0]
-        except IndexError:
-             messagebox.showerror("Error", "Could not retrieve selected item details.")
-             return
-        if item_name in self.current_sale:
-            current_quantity = self.current_sale[item_name]['quantity']
+
+        if selected_item_id in self.current_sale:
+            item_name = self.current_sale[selected_item_id]['name']
+            current_quantity = self.current_sale[selected_item_id]['quantity']
             if current_quantity > 1:
-                self.current_sale[item_name]['quantity'] -= 1
-                print(f"Decreased quantity for {item_name}.")
+                self.current_sale[selected_item_id]['quantity'] -= 1
+                self.show_status(f"Decreased quantity for {item_name}.", 2000)
             else:
-                print(f"Quantity for {item_name} is 1. Removing item.")
-                del self.current_sale[item_name]
-            self.update_sale_display(preserve_selection=item_name)
+                # Quantity is 1, remove the item
+                del self.current_sale[selected_item_id]
+                self.show_status(f"Removed {item_name} from sale.", 2000)
+            # Preserve selection by passing the item_key (which is the treeview iid)
+            self.update_sale_display(preserve_selection=selected_item_id if current_quantity > 1 else None)
         else:
              messagebox.showerror("Error", "Could not find the selected item in the current sale data.")
+             self.show_status("Error: Could not decrease quantity.", 5000)
+
 
     def remove_selected_item_from_sale(self):
         """Removes the currently selected item from the sale tree (current sale only)."""
-        selected_item_id = self.sale_tree.focus()
+        selected_item_id = self.sale_tree.focus() # This is the item_key
         if not selected_item_id:
             messagebox.showwarning("No Selection", "Please select an item from the 'Current Sale' list to remove.")
             return
-        try:
-            item_values = self.sale_tree.item(selected_item_id, 'values')
-            item_name = item_values[0]
-        except IndexError:
-             messagebox.showerror("Error", "Could not retrieve selected item details.")
-             return
-        if item_name in self.current_sale:
+
+        if selected_item_id in self.current_sale:
+            item_name = self.current_sale[selected_item_id]['name']
             confirmed = messagebox.askyesno("Confirm Remove Item", f"Are you sure you want to remove all '{item_name}' from the current sale?")
             if confirmed:
-                del self.current_sale[item_name]
+                del self.current_sale[selected_item_id]
                 self.update_sale_display()
-                print(f"Removed {item_name} from current sale display.")
+                self.show_status(f"Removed {item_name} from sale.", 3000)
+            else:
+                self.show_status("Item removal cancelled.", 2000)
         else:
              messagebox.showerror("Error", "Could not find the selected item in the current sale data.")
+             self.show_status("Error: Could not remove item.", 5000)
+
 
     def update_sale_display(self, preserve_selection=None):
         """Updates the Treeview and total label, optionally preserving selection."""
-        selected_id_to_preserve = None
-        if preserve_selection is None:
-            selected_id_to_preserve = self.sale_tree.focus()
+        selected_id_to_preserve = preserve_selection # Use passed key directly
 
         for i in self.sale_tree.get_children():
             self.sale_tree.delete(i)
 
         self.total_amount = 0.0
-        sorted_sale_items = sorted(self.current_sale.items())
+        # Sort by the 'name' within the dictionary value for display consistency
+        sorted_sale_items = sorted(self.current_sale.items(), key=lambda item: item[1]['name'])
         new_selection_id = None
 
-        for name, details in sorted_sale_items:
+        for item_key, details in sorted_sale_items:
+            name = details['name']
             price = details['price']
             quantity = details['quantity']
             subtotal = price * quantity
             price_str = f"{gui_utils.CURRENCY_SYMBOL}{price:.2f}"
             subtotal_str = f"{gui_utils.CURRENCY_SYMBOL}{subtotal:.2f}"
-            item_id = self.sale_tree.insert("", tk.END, values=(name, quantity, price_str, subtotal_str))
+            # Use item_key as the iid
+            item_id = self.sale_tree.insert("", tk.END, iid=item_key, values=(name, quantity, price_str, subtotal_str))
 
-            if preserve_selection is not None and name == preserve_selection:
-                new_selection_id = item_id
-            elif preserve_selection is None and selected_id_to_preserve:
-                 try:
-                     if self.sale_tree.exists(selected_id_to_preserve):
-                         original_selected_name = self.sale_tree.item(selected_id_to_preserve, 'values')[0]
-                         if original_selected_name == name:
-                             new_selection_id = item_id
-                     else:
-                         selected_id_to_preserve = None
-                 except (tk.TclError, IndexError):
-                     selected_id_to_preserve = None
+            if selected_id_to_preserve == item_key:
+                new_selection_id = item_id # Store the actual iid to reselect
 
             self.total_amount += subtotal
 
@@ -442,22 +573,25 @@ class POSApp:
             print(f"Reselecting item ID: {new_selection_id}")
             self.sale_tree.focus(new_selection_id)
             self.sale_tree.selection_set(new_selection_id)
-        elif selected_id_to_preserve and not self.sale_tree.exists(selected_id_to_preserve):
-             self.sale_tree.focus('')
-             self.sale_tree.selection_set('')
-        elif preserve_selection is None and not new_selection_id:
+        else:
+             # If the preserved item was removed, clear focus
              self.sale_tree.focus('')
              self.sale_tree.selection_set('')
 
 
     def clear_sale(self):
         """Clears the current sale data and updates the display."""
-        if not self.current_sale: return
+        if not self.current_sale:
+            self.show_status("Sale is already empty.", 2000)
+            return
         confirmed = messagebox.askyesno("Confirm Clear", "Are you sure you want to clear the current sale?")
         if confirmed:
             self.current_sale = {}
             self.update_sale_display()
-            print("Sale cleared.")
+            self.show_status("Sale cleared.", 3000)
+        else:
+            self.show_status("Clear sale cancelled.", 2000)
+
 
     def generate_receipt_text(self, sale_id, timestamp_obj, customer_name):
         """Generates a simple text receipt for the current sale."""
@@ -468,7 +602,9 @@ class POSApp:
         receipt += "--------------------------------------\n"
         receipt += "{:<18} {:>3} {:>7} {:>8}\n".format("Item", "Qty", "Price", "Subtotal")
         receipt += "--------------------------------------\n"
-        for name, details in sorted(self.current_sale.items()):
+        # Iterate through the values (dictionaries) and sort by 'name' for receipt
+        for details in sorted(self.current_sale.values(), key=lambda item: item['name']):
+            name = details['name']
             qty = details['quantity']
             price = details['price']
             subtotal = qty * price
@@ -486,22 +622,35 @@ class POSApp:
         """Prompts for customer name using custom dialog, records sale, generates receipt, clears sale."""
         if not self.current_sale:
              messagebox.showwarning("Empty Sale", "Cannot finalize an empty sale.")
+             self.show_status("Cannot finalize an empty sale.", 3000)
              return
 
         dialog = CustomerSelectionDialog(self.root)
         customer_name = dialog.result
         if customer_name is None:
-             print("Sale cancelled by user (customer selection).")
+             self.show_status("Sale cancelled.", 2000)
              return
         if not customer_name.strip():
             customer_name = "N/A"
 
         current_timestamp_obj = datetime.datetime.now()
-        sale_id = db_operations.save_sale_record(current_timestamp_obj, self.total_amount, customer_name)
-        if sale_id is None: return
 
-        items_saved = db_operations.save_sale_items_records(sale_id, self.current_sale)
-        if not items_saved: return
+        # Prepare sale items data for saving (using the 'name' from the details dict)
+        sale_items_for_db = {}
+        for item_key, details in self.current_sale.items():
+             sale_items_for_db[details['name']] = {'price': details['price'], 'quantity': details['quantity']}
+
+
+        sale_id = db_operations.save_sale_record(current_timestamp_obj, self.total_amount, customer_name)
+        if sale_id is None:
+            self.show_status("Error saving sale record.", 5000)
+            return
+
+        items_saved = db_operations.save_sale_items_records(sale_id, sale_items_for_db) # Use prepared data
+        if not items_saved:
+            self.show_status("Error saving sale items.", 5000)
+            # Consider attempting to delete the sale header record here if items fail
+            return
 
         receipt_text = self.generate_receipt_text(sale_id, current_timestamp_obj, customer_name)
         print("--- Receipt ---")
@@ -511,7 +660,8 @@ class POSApp:
 
         self.current_sale = {}
         self.update_sale_display()
-        print(f"Sale {sale_id} finalized and recorded.")
+        self.show_status(f"Sale {sale_id} finalized and recorded.", 3000) # Status bar
+
 
     def view_sales_history(self):
         """Opens the sales history window."""
@@ -523,7 +673,6 @@ class POSApp:
              return
 
         if self.history_window is None or not tk.Toplevel.winfo_exists(self.history_window):
-            # --- Use the imported class ---
             self.history_window = SalesHistoryWindow(self.root)
             self.history_window.grab_set()
         else:
@@ -534,7 +683,6 @@ class POSApp:
     def view_customers(self):
         """Opens the customer management window."""
         if self.customer_list_window is None or not tk.Toplevel.winfo_exists(self.customer_list_window):
-            # --- Use the imported class ---
             self.customer_list_window = CustomerListWindow(self.root)
             self.customer_list_window.grab_set()
         else:

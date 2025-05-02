@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from tkinter import filedialog # Added for file dialogs
+import csv # Added for CSV export
 
 # Import necessary modules
 import db_operations
@@ -64,8 +66,8 @@ class CustomerListWindow(tk.Toplevel):
         list_frame.columnconfigure(0, weight=1)
 
         # --- Updated columns: Added 'seq_no', removed 'cust_id' display ---
-        customer_columns = ('seq_no', 'name', 'contact', 'address') # Removed cust_id
-        self.customer_tree = ttk.Treeview(list_frame, columns=customer_columns, show="headings", selectmode="browse")
+        self.customer_columns = ('seq_no', 'name', 'contact', 'address') # Store for export
+        self.customer_tree = ttk.Treeview(list_frame, columns=self.customer_columns, show="headings", selectmode="browse")
 
         # --- Updated headings ---
         self.customer_tree.heading('seq_no', text='Cust #') # Changed heading
@@ -92,6 +94,10 @@ class CustomerListWindow(tk.Toplevel):
         # --- Bottom Buttons (Delete, Close) ---
         bottom_button_frame = ttk.Frame(self)
         bottom_button_frame.grid(row=2, column=0, pady=10)
+
+        # --- Add Export Button ---
+        export_button = ttk.Button(bottom_button_frame, text="Export Customers", command=self.export_customers_to_csv)
+        export_button.pack(side=tk.LEFT, padx=10)
 
         self.delete_button = ttk.Button(bottom_button_frame, text="Delete Selected", command=self.delete_selected_customer)
         self.delete_button.pack(side=tk.LEFT, padx=10)
@@ -220,4 +226,41 @@ class CustomerListWindow(tk.Toplevel):
             display_address = address if address is not None else ""
             # --- Insert display_seq_no as the first value ---
             self.customer_tree.insert("", tk.END, iid=cust_id, values=(display_seq_no, name, display_contact, display_address))
+
+    def export_customers_to_csv(self):
+        """Exports the currently displayed customer list to a CSV file."""
+        if not self.customer_tree.get_children():
+            messagebox.showwarning("No Data", "There are no customers to export.", parent=self)
+            return
+
+        # Ask for save location
+        file_path = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save Customer List As",
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+
+        if not file_path: # User cancelled
+            return
+
+        try:
+            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+
+                # Write header row using the Treeview column headings
+                headers = [self.customer_tree.heading(col)['text'] for col in self.customer_columns]
+                writer.writerow(headers)
+
+                # Write data rows
+                # Iterate in the order they appear in the treeview (which is how populate_customer_list inserts them)
+                for item_id in self.customer_tree.get_children():
+                    row_values = self.customer_tree.item(item_id)['values']
+                    writer.writerow(row_values)
+
+            messagebox.showinfo("Export Successful", f"Customer list exported successfully to:\n{file_path}", parent=self)
+            print(f"Customer list exported to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"Could not export customer list.\nError: {e}", parent=self)
+            print(f"Error exporting customer list: {e}")
 
