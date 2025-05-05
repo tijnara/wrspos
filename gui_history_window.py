@@ -1,7 +1,6 @@
+# Import necessary libraries
 import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
-from tkinter import filedialog # Added for file dialogs
+from tkinter import ttk, messagebox, filedialog
 import datetime
 import os
 import sqlite3 # Keep for error catching if needed
@@ -15,6 +14,7 @@ except ImportError:
     DateEntry = None
 
 # --- Import Project Modules ---
+# Ensure all these .py files are in the SAME directory as main.py
 import db_operations
 import gui_utils # Import the new utils module
 
@@ -25,9 +25,6 @@ class SalesHistoryWindow(tk.Toplevel):
         self.parent = parent # Store parent reference if needed
         self.title("Sales History & Summary")
         gui_utils.set_window_icon(self) # Use helper function
-
-        # --- REMOVE Style Application ---
-        # self.apply_styles() # Removed
 
         win_width = 850
         win_height = 750 # May need adjustment for new labels
@@ -45,18 +42,15 @@ class SalesHistoryWindow(tk.Toplevel):
         self.rowconfigure(7, weight=0) # Buttons row
 
         # --- Widgets ---
-        # Remove style argument
         ttk.Label(self, text="Sales List", font=("Arial", 14, "bold")).grid(row=0, column=0, pady=10, padx=10, sticky="w")
         ttk.Label(self, text="Receipt Details", font=("Arial", 14, "bold")).grid(row=0, column=1, pady=10, padx=10, sticky="w")
 
         # Sales List Treeview
-        # Remove style argument
         list_frame = ttk.Frame(self)
         list_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=5)
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
         self.sales_columns_display = ("sale_num", "receipt_no", "timestamp", "customer", "total") # Store for export headers
-        # Remove style argument
         self.sales_tree = ttk.Treeview(list_frame, columns=self.sales_columns_display, show="headings", selectmode="browse")
         self.sales_tree.heading("sale_num", text="Sales #")
         self.sales_tree.heading("receipt_no", text="Receipt No.")
@@ -75,12 +69,10 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)
 
         # Receipt Details Text Area
-        # Remove style argument
         text_frame = ttk.Frame(self)
         text_frame.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=5)
         text_frame.rowconfigure(0, weight=1)
         text_frame.columnconfigure(0, weight=1)
-        # Remove manual styling
         self.receipt_text = tk.Text(text_frame, wrap="word", state="disabled", height=10, width=40, font=("Courier New", 9), relief="sunken", borderwidth=1)
         self.receipt_text.grid(row=0, column=0, sticky="nsew")
         receipt_text_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.receipt_text.yview)
@@ -88,72 +80,72 @@ class SalesHistoryWindow(tk.Toplevel):
         receipt_text_scrollbar.grid(row=0, column=1, sticky="ns")
 
         # --- Filter Frame (New Row 2) ---
-        # Remove style argument
         filter_frame = ttk.Frame(self, padding="5")
         filter_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(5,0))
         filter_frame.columnconfigure(1, weight=1) # Allow combobox to expand
-        ttk.Label(filter_frame, text="Filter by Customer:").grid(row=0, column=0, padx=(0, 5), sticky="w") # Remove style
+        ttk.Label(filter_frame, text="Filter by Customer:").grid(row=0, column=0, padx=(0, 5), sticky="w")
         # Populate customer list for filter
-        customer_list = ["All Customers"] + sorted([c for c in db_operations.fetch_distinct_customer_names() if c != 'N/A'])
+        customer_list = ["All Customers"] + sorted([c for c in db_operations.fetch_distinct_customer_names() if c != 'N/A']) #
         self.filter_customer_var = tk.StringVar(value="All Customers")
         self.filter_customer_combo = ttk.Combobox(filter_frame, textvariable=self.filter_customer_var, values=customer_list, state="readonly", width=30)
         self.filter_customer_combo.grid(row=0, column=1, padx=5, sticky="ew")
         # Add a button to apply filters
-        filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.apply_filters) # Remove style
+        filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.apply_filters)
         filter_button.grid(row=0, column=2, padx=(10, 0))
 
 
         # Default Summaries (Now Row 3)
-        # Remove style argument
         summary_frame = ttk.LabelFrame(self, text="Default Summaries", padding="5")
         summary_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
         summary_frame.columnconfigure(1, weight=1) # Make right column expand
-        # Week
-        ttk.Label(summary_frame, text="This Week (Mon-Sun):").grid(row=0, column=0, sticky="w", padx=5, pady=1) # Remove style
-        self.week_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
+
+        # ***MODIFIED***: Create StringVars for dynamic date labels
+        self.week_label_var = tk.StringVar(value="This Week:")
+        self.month_label_var = tk.StringVar(value="This Month:")
+
+        # ***MODIFIED***: Use StringVars for the labels
+        ttk.Label(summary_frame, textvariable=self.week_label_var).grid(row=0, column=0, sticky="w", padx=5, pady=1)
+        self.week_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) #
         self.week_total_label.grid(row=0, column=1, sticky="e", padx=5, pady=1)
-        self.week_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Remove style
+        self.week_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10))
         self.week_items_label.grid(row=1, column=0, sticky="w", padx=5, pady=1)
-        self.week_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
+        self.week_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) #
         self.week_avg_label.grid(row=1, column=1, sticky="e", padx=5, pady=1)
-        # Month
-        ttk.Label(summary_frame, text="This Month:").grid(row=2, column=0, sticky="w", padx=5, pady=(5,1)) # Remove style
-        self.month_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
+
+        ttk.Label(summary_frame, textvariable=self.month_label_var).grid(row=2, column=0, sticky="w", padx=5, pady=(5,1))
+        self.month_total_label = ttk.Label(summary_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) #
         self.month_total_label.grid(row=2, column=1, sticky="e", padx=5, pady=(5,1))
-        self.month_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10)) # Remove style
+        self.month_items_label = ttk.Label(summary_frame, text="Items: 0", font=("Arial", 10))
         self.month_items_label.grid(row=3, column=0, sticky="w", padx=5, pady=1)
-        self.month_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
+        self.month_avg_label = ttk.Label(summary_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) #
         self.month_avg_label.grid(row=3, column=1, sticky="e", padx=5, pady=1)
 
 
         # Custom Date Range Selection (Now Row 4)
-        # Remove style argument
         custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10")
         custom_entry_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
         custom_entry_frame.columnconfigure(1, weight=0)
         custom_entry_frame.columnconfigure(3, weight=0)
         custom_entry_frame.columnconfigure(4, weight=1)
-        ttk.Label(custom_entry_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w') # Remove style
+        ttk.Label(custom_entry_frame, text="Start Date:").grid(row=0, column=0, padx=(0, 5), pady=5, sticky='w')
         # DateEntry styling might be limited or require specific tkcalendar knowledge
         self.start_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                           foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.start_date_entry.grid(row=0, column=1, padx=(0, 10), pady=5)
-        ttk.Label(custom_entry_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w') # Remove style
+        ttk.Label(custom_entry_frame, text="End Date:").grid(row=0, column=2, padx=(10, 5), pady=5, sticky='w')
         self.end_date_entry = DateEntry(custom_entry_frame, width=12, background='darkblue',
                                         foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.end_date_entry.grid(row=0, column=3, padx=(0, 10), pady=5)
         self.end_date_entry.set_date(datetime.date.today())
-        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary", command=self.update_custom_summary) # Remove style
+        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary", command=self.update_custom_summary)
         view_range_button.grid(row=0, column=4, padx=(10, 5), pady=5, sticky='e')
 
         # Custom Date Range Details Treeview (Now Row 5)
-        # Remove style argument
         custom_summary_tree_frame = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5")
         custom_summary_tree_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
         custom_summary_tree_frame.rowconfigure(0, weight=1)
         custom_summary_tree_frame.columnconfigure(0, weight=1)
         self.summary_columns = ('product', 'total_qty', 'total_revenue') # Store for export
-        # Remove style argument
         self.custom_summary_tree = ttk.Treeview(custom_summary_tree_frame, columns=self.summary_columns, show="headings", selectmode="browse") # Changed selectmode
         self.custom_summary_tree.heading('product', text='Product')
         self.custom_summary_tree.heading('total_qty', text='Total Qty Sold')
@@ -169,29 +161,27 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.bind("<Double-Button-1>", self.on_summary_item_select)
 
         # Custom Range Grand Total Label and Export Button (Now Row 6)
-        # Remove style argument
         custom_total_frame = ttk.Frame(self)
         custom_total_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,5))
         custom_total_frame.columnconfigure(0, weight=1) # Make space for labels
-        self.custom_range_items_label = ttk.Label(custom_total_frame, text="Items: 0", font=("Arial", 10)) # Remove style
+        self.custom_range_items_label = ttk.Label(custom_total_frame, text="Items: 0", font=("Arial", 10))
         self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5)
-        self.custom_range_avg_label = ttk.Label(custom_total_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) # Remove style
+        self.custom_range_avg_label = ttk.Label(custom_total_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10)) #
         self.custom_range_avg_label.grid(row=1, column=0, sticky="w", padx=5)
-        self.custom_range_grand_total_label = ttk.Label(custom_total_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10, "bold")) # Remove style
+        self.custom_range_grand_total_label = ttk.Label(custom_total_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10, "bold")) #
         self.custom_range_grand_total_label.grid(row=0, column=1, sticky="e", padx=(10,0)) # Total on right
-        export_summary_button = ttk.Button(custom_total_frame, text="Export Summary", command=self.export_summary_to_csv) # Remove style
+        export_summary_button = ttk.Button(custom_total_frame, text="Export Summary", command=self.export_summary_to_csv)
         export_summary_button.grid(row=1, column=1, sticky="e", padx=(10, 0), pady=(2,0)) # Export below total
 
 
         # Action Buttons (Now Row 7)
-        # Remove style argument
         action_button_frame = ttk.Frame(self)
         action_button_frame.grid(row=7, column=0, columnspan=2, pady=10)
-        export_sales_button = ttk.Button(action_button_frame, text="Export Sales List", command=self.export_sales_to_csv) # Remove style
+        export_sales_button = ttk.Button(action_button_frame, text="Export Sales List", command=self.export_sales_to_csv)
         export_sales_button.pack(side=tk.LEFT, padx=10)
-        delete_button = ttk.Button(action_button_frame, text="Delete Selected Sale", command=self.delete_selected_sale) # Remove style
+        delete_button = ttk.Button(action_button_frame, text="Delete Selected Sale", command=self.delete_selected_sale)
         delete_button.pack(side=tk.LEFT, padx=10)
-        close_button = ttk.Button(action_button_frame, text="Close", command=self.destroy) # Remove style
+        close_button = ttk.Button(action_button_frame, text="Close", command=self.destroy)
         close_button.pack(side=tk.LEFT, padx=10)
 
         # Initial data population
@@ -200,7 +190,6 @@ class SalesHistoryWindow(tk.Toplevel):
         # --- Bind Escape key ---
         self.bind('<Escape>', lambda event=None: self.destroy())
 
-    # --- REMOVED apply_styles method ---
 
     def apply_filters(self):
         """Applies the selected customer filter and refreshes the views."""
@@ -214,50 +203,70 @@ class SalesHistoryWindow(tk.Toplevel):
         for i in self.sales_tree.get_children():
             self.sales_tree.delete(i)
         # Fetch based on selected customer
-        sales_data = db_operations.fetch_sales_list_from_db(customer_name=selected_customer)
+        sales_data = db_operations.fetch_sales_list_from_db(customer_name=selected_customer) #
         if sales_data:
             receipt_counter = 0
-            for i, sale in enumerate(sales_data): # Use enumerate for row tagging
+            # Display newest first by inserting at index 0
+            for i, sale in enumerate(sales_data):
                 receipt_counter += 1 # Increment for each sale
                 sale_id, timestamp_str, total_amount, customer_name_db = sale
                 try:
                     timestamp_obj = datetime.datetime.fromisoformat(timestamp_str)
                     display_ts = timestamp_obj.strftime('%a %Y-%m-%d %H:%M:%S') # Include day
                 except (TypeError, ValueError):
-                    display_ts = timestamp_str
-                total_display = f"{gui_utils.CURRENCY_SYMBOL}{total_amount:.2f}"
-                # Remove tags argument
+                    display_ts = timestamp_str # Fallback to original string if format is wrong
+                total_display = f"{gui_utils.CURRENCY_SYMBOL}{total_amount:.2f}" #
+                # Insert at the beginning (index 0) to show newest first
                 self.sales_tree.insert("", 0, values=(sale_id, receipt_counter, display_ts, customer_name_db, total_display), iid=sale_id)
         else:
-            pass
-        self.update_receipt_display("")
+            pass # No sales data found
+        self.update_receipt_display("") # Clear receipt display
 
     def update_default_summaries(self):
         """Calculates and displays weekly and monthly sales totals based on filter."""
         selected_customer = self.filter_customer_var.get()
         today = datetime.date.today()
+
+        # Calculate week dates (Monday to Sunday)
         start_of_week = today + relativedelta(weekday=MO(-1))
         end_of_week = start_of_week + relativedelta(days=6)
+
+        # Calculate month dates
         start_of_month = today.replace(day=1)
-        end_of_month = today.replace(day=1) + relativedelta(months=+1) - datetime.timedelta(days=1)
+        # End of month is start of next month minus one day
+        end_of_month = (today.replace(day=1) + relativedelta(months=+1)) - datetime.timedelta(days=1)
+
+        # Format dates for database query (ISO format) and display
+        date_format_display = "%Y-%m-%d" # Format for display
         start_week_dt_str = datetime.datetime.combine(start_of_week, datetime.time.min).isoformat()
+        # End date for query needs to be start of the *next* day
         end_week_dt_str = (datetime.datetime.combine(end_of_week, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
         start_month_dt_str = datetime.datetime.combine(start_of_month, datetime.time.min).isoformat()
         end_month_dt_str = (datetime.datetime.combine(end_of_month, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
 
+        # ***MODIFIED***: Format date ranges for labels
+        week_range_str = f"{start_of_week.strftime(date_format_display)} to {end_of_week.strftime(date_format_display)}"
+        month_range_str = f"{start_of_month.strftime(date_format_display)} to {end_of_month.strftime(date_format_display)}"
+
         # Fetch stats for the week
-        week_revenue, week_items, week_sales_count = db_operations.fetch_sales_stats(start_week_dt_str, end_week_dt_str, customer_name=selected_customer)
+        week_revenue, week_items, week_sales_count = db_operations.fetch_sales_stats(start_week_dt_str, end_week_dt_str, customer_name=selected_customer) #
         week_avg = week_revenue / week_sales_count if week_sales_count > 0 else 0.0
-        self.week_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{week_revenue:.2f}")
+
+        # ***MODIFIED***: Update labels with dates and stats
+        self.week_label_var.set(f"This Week ({week_range_str}):")
+        self.week_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{week_revenue:.2f}") #
         self.week_items_label.config(text=f"Items: {week_items}")
-        self.week_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{week_avg:.2f}")
+        self.week_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{week_avg:.2f}") #
 
         # Fetch stats for the month
-        month_revenue, month_items, month_sales_count = db_operations.fetch_sales_stats(start_month_dt_str, end_month_dt_str, customer_name=selected_customer)
+        month_revenue, month_items, month_sales_count = db_operations.fetch_sales_stats(start_month_dt_str, end_month_dt_str, customer_name=selected_customer) #
         month_avg = month_revenue / month_sales_count if month_sales_count > 0 else 0.0
-        self.month_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{month_revenue:.2f}")
+
+        # ***MODIFIED***: Update labels with dates and stats
+        self.month_label_var.set(f"This Month ({month_range_str}):")
+        self.month_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{month_revenue:.2f}") #
         self.month_items_label.config(text=f"Items: {month_items}")
-        self.month_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{month_avg:.2f}")
+        self.month_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{month_avg:.2f}") #
 
 
     def update_custom_summary(self):
@@ -271,31 +280,32 @@ class SalesHistoryWindow(tk.Toplevel):
                 return
 
             start_date_dt_str = datetime.datetime.combine(start_date, datetime.time.min).isoformat()
+            # End date for query needs to be start of the *next* day
             end_date_dt_str = (datetime.datetime.combine(end_date, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
 
             # Fetch product summary
-            summary_data = db_operations.fetch_product_summary_by_date_range(start_date_dt_str, end_date_dt_str, customer_name=selected_customer)
+            summary_data = db_operations.fetch_product_summary_by_date_range(start_date_dt_str, end_date_dt_str, customer_name=selected_customer) #
 
             for i in self.custom_summary_tree.get_children():
                 self.custom_summary_tree.delete(i)
 
             if summary_data:
-                for i, item_summary in enumerate(summary_data): # Use enumerate for row tagging
-                    # tag = 'evenrow' if i % 2 == 0 else 'oddrow' # Remove tag assignment
+                # Add alternating row tags if needed (similar to sale_tree, requires tags='evenrow'/'oddrow')
+                for i, item_summary in enumerate(summary_data):
                     name, total_qty, total_revenue = item_summary
-                    revenue_display = f"{gui_utils.CURRENCY_SYMBOL}{total_revenue:.2f}"
-                    # Remove tags argument
+                    revenue_display = f"{gui_utils.CURRENCY_SYMBOL}{total_revenue:.2f}" #
                     self.custom_summary_tree.insert("", tk.END, values=(name, total_qty, revenue_display))
             else:
+                 # Optionally add a placeholder if no data
                  self.custom_summary_tree.insert("", tk.END, values=("No sales in this period", "", ""))
 
             # Fetch overall stats for the custom range
-            custom_revenue, custom_items, custom_sales_count = db_operations.fetch_sales_stats(start_date_dt_str, end_date_dt_str, customer_name=selected_customer)
+            custom_revenue, custom_items, custom_sales_count = db_operations.fetch_sales_stats(start_date_dt_str, end_date_dt_str, customer_name=selected_customer) #
             custom_avg = custom_revenue / custom_sales_count if custom_sales_count > 0 else 0.0
 
-            self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{custom_revenue:.2f}")
+            self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{custom_revenue:.2f}") #
             self.custom_range_items_label.config(text=f"Items: {custom_items}")
-            self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{custom_avg:.2f}")
+            self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{custom_avg:.2f}") #
 
 
         except Exception as e:
@@ -314,7 +324,8 @@ class SalesHistoryWindow(tk.Toplevel):
             if not item_data or len(item_data) < 5: # Now expecting 5 values
                  raise ValueError("Could not retrieve sale details from list.")
 
-            conn = sqlite3.connect(db_operations.DATABASE_FILENAME)
+            # Fetch details directly from DB to ensure accuracy
+            conn = sqlite3.connect(db_operations.DATABASE_FILENAME) #
             cursor = conn.cursor()
             cursor.execute("SELECT SaleTimestamp, CustomerName, TotalAmount FROM Sales WHERE SaleID = ?", (sale_id,))
             sale_data_db = cursor.fetchone()
@@ -324,9 +335,9 @@ class SalesHistoryWindow(tk.Toplevel):
             timestamp_str = sale_data_db[0]
             customer_name = sale_data_db[1]
             total_amount = sale_data_db[2]
-            total_display = f"{gui_utils.CURRENCY_SYMBOL}{total_amount:.2f}"
+            total_display = f"{gui_utils.CURRENCY_SYMBOL}{total_amount:.2f}" #
 
-            items = db_operations.fetch_sale_items_from_db(sale_id)
+            items = db_operations.fetch_sale_items_from_db(sale_id) #
             receipt = self.generate_detailed_receipt(sale_id, timestamp_str, customer_name, total_display, items)
             self.update_receipt_display(receipt)
         except (IndexError, ValueError, TypeError, sqlite3.Error) as e:
@@ -343,17 +354,20 @@ class SalesHistoryWindow(tk.Toplevel):
         try:
             sale_id_to_delete = int(selected_item_id) # The iid is the SaleID
             try:
+                # Get details from the selected row for confirmation message
                 values = self.sales_tree.item(selected_item_id, 'values')
                 confirm_msg = f"Are you sure you want to permanently delete Sales # {sale_id_to_delete} ({values[2]})?" # Index 2 is timestamp now
             except (tk.TclError, IndexError):
+                 # Fallback if getting item fails
                 confirm_msg = f"Are you sure you want to permanently delete Sales # {sale_id_to_delete}?"
 
             confirmed = messagebox.askyesno("Confirm Deletion", confirm_msg, parent=self)
             if confirmed:
-                if db_operations.delete_sale_from_db(sale_id_to_delete):
+                if db_operations.delete_sale_from_db(sale_id_to_delete): #
                     messagebox.showinfo("Success", f"Sales # {sale_id_to_delete} deleted successfully.", parent=self)
                     self.apply_filters() # Refresh lists after delete
                 else:
+                    # db_operations likely showed an error, but show one here too
                     messagebox.showerror("Error", f"Failed to delete Sales # {sale_id_to_delete}.", parent=self)
         except (ValueError, IndexError, TypeError) as e:
              messagebox.showerror("Error", f"Could not determine selected sale ID: {e}", parent=self)
@@ -374,7 +388,7 @@ class SalesHistoryWindow(tk.Toplevel):
             timestamp_obj = datetime.datetime.fromisoformat(timestamp_str)
             receipt += f"Date: {timestamp_obj.strftime('%a %Y-%m-%d %H:%M:%S')}\n"
         except (TypeError, ValueError):
-            receipt += f"Date: {timestamp_str}\n"
+            receipt += f"Date: {timestamp_str}\n" # Fallback
         receipt += f"Customer: {customer_name}\n"
         receipt += "--------------------------------------\n"
         receipt += "{:<18} {:>3} {:>7} {:>8}\n".format("Item", "Qty", "Price", "Subtotal")
@@ -382,8 +396,9 @@ class SalesHistoryWindow(tk.Toplevel):
         if items:
             for item_details in items:
                 name, qty, price, subtotal = item_details
-                price_str = f"{gui_utils.CURRENCY_SYMBOL}{price:.2f}"
-                subtotal_str = f"{gui_utils.CURRENCY_SYMBOL}{subtotal:.2f}"
+                price_str = f"{gui_utils.CURRENCY_SYMBOL}{price:.2f}" #
+                subtotal_str = f"{gui_utils.CURRENCY_SYMBOL}{subtotal:.2f}" #
+                # Truncate name if too long
                 receipt += "{:<18} {:>3d} {:>7} {:>8}\n".format(name[:18], qty, price_str, subtotal_str)
         else:
             receipt += " (No item details found)\n"
@@ -406,14 +421,15 @@ class SalesHistoryWindow(tk.Toplevel):
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
 
-        if not file_path: return
+        if not file_path: return # User cancelled
 
         try:
             with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
+                # Get headers from treeview columns
                 headers = [self.sales_tree.heading(col)['text'] for col in self.sales_columns_display]
                 writer.writerow(headers)
-                # Iterate in display order (newest first)
+                # Iterate in display order (newest first as inserted)
                 for item_id in self.sales_tree.get_children():
                     row_values = self.sales_tree.item(item_id)['values']
                     writer.writerow(row_values)
@@ -429,6 +445,7 @@ class SalesHistoryWindow(tk.Toplevel):
         if not self.custom_summary_tree.get_children():
             messagebox.showwarning("No Data", "There is no summary data to export.", parent=self)
             return
+        # Check if only the 'No sales' placeholder is present
         first_item_values = self.custom_summary_tree.item(self.custom_summary_tree.get_children()[0])['values']
         if first_item_values and first_item_values[0] == "No sales in this period":
              messagebox.showwarning("No Data", "There is no summary data to export.", parent=self)
@@ -441,13 +458,14 @@ class SalesHistoryWindow(tk.Toplevel):
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
         )
 
-        if not file_path: return
+        if not file_path: return # User cancelled
 
         try:
             with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 headers = [self.custom_summary_tree.heading(col)['text'] for col in self.summary_columns]
                 writer.writerow(headers)
+                # Iterate through items in the summary tree
                 for item_id in self.custom_summary_tree.get_children():
                     row_values = self.custom_summary_tree.item(item_id)['values']
                     writer.writerow(row_values)
@@ -479,7 +497,25 @@ class SalesHistoryWindow(tk.Toplevel):
                 f"Total Quantity Sold: {total_qty}\n"
                 f"Total Revenue: {total_revenue_str}"
             )
+            # Show details in a simple messagebox
             messagebox.showinfo("Product Summary Detail", message, parent=self)
         except IndexError:
             messagebox.showerror("Error", "Could not retrieve details for the selected summary item.", parent=self)
 
+# # Note: The __main__ block below is for isolated testing and might need adjustments
+# # depending on how db_operations and gui_utils are structured if run standalone.
+# # It's generally best to run the application via main.py.
+# if __name__ == '__main__':
+#     root = tk.Tk()
+#     # Dummy db_operations and gui_utils might be needed here for testing
+#     # (As shown in the previous attempt's output)
+#     # ... (dummy class definitions would go here) ...
+
+#     if DateEntry is None:
+#        print("tkcalendar not installed, date entry widgets will be disabled.")
+
+#     # Initialize dummy db if needed
+#     # ...
+
+#     app = SalesHistoryWindow(root)
+#     root.mainloop()
