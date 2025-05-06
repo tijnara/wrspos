@@ -5,7 +5,7 @@ from tkinter import messagebox # Keep messagebox import here for DB errors shown
 import logging # Assuming logging is used elsewhere
 
 # --- Constants ---
-CURRENCY_SYMBOL = "₱"
+CURRENCY_SYMBOL = "₱" # This is also in gui_utils.py, ensure consistency or single source
 DATABASE_FILENAME = "pos_system.db" # database file
 
 # --- Default Product Data (Used if DB is empty initially) ---
@@ -169,11 +169,11 @@ def insert_product_to_db(name, price):
         logging.info(f"Inserted product '{name}' with price {price:.2f} into DB.")
     except sqlite3.IntegrityError:
         # This happens if UNIQUE constraint fails (product name exists)
-        conn.rollback()
+        if conn: conn.rollback() # Ensure rollback on IntegrityError
         logging.warning(f"Attempted to insert duplicate product: '{name}'.")
         messagebox.showwarning("Product Exists", f"Product '{name}' already exists in the database.")
     except sqlite3.Error as e:
-        conn.rollback()
+        if conn: conn.rollback()
         logging.exception(f"Error inserting product '{name}' into DB.")
         messagebox.showerror("Database Error", f"Could not add product '{name}'.\nError: {e}")
     finally:
@@ -197,7 +197,7 @@ def delete_product_from_db(product_name):
             logging.warning(f"Product '{product_name}' not found in database for deletion.")
             messagebox.showwarning("Not Found", f"Product '{product_name}' was not found in the database.")
     except sqlite3.Error as e:
-        conn.rollback()
+        if conn: conn.rollback()
         logging.exception(f"Error deleting product '{product_name}' from DB.")
         messagebox.showerror("Database Error", f"Could not delete product '{product_name}'.\nError: {e}")
     finally:
@@ -224,11 +224,11 @@ def update_product_in_db(original_name, new_name, new_price):
             messagebox.showwarning("Not Found", f"Product '{original_name}' was not found in the database.")
     except sqlite3.IntegrityError:
         # This happens if the new_name violates the UNIQUE constraint
-        conn.rollback()
+        if conn: conn.rollback()
         logging.warning(f"Update error for '{original_name}': Name '{new_name}' likely already exists.")
         messagebox.showerror("Update Error", f"Could not rename to '{new_name}'.\nA product with that name already exists.")
     except sqlite3.Error as e:
-        conn.rollback()
+        if conn: conn.rollback()
         logging.exception(f"Error updating product '{original_name}' in DB.")
         messagebox.showerror("Database Error", f"Could not update product '{original_name}'.\nError: {e}")
     finally:
@@ -259,24 +259,29 @@ def save_sale_record(timestamp, total_amount, customer_name):
         if conn: conn.close()
     return sale_id
 
-def save_sale_items_records(sale_id, sale_details):
-    """Saves the items for a given sale."""
+def save_sale_items_records(sale_id, sale_details_list):
+    """
+    Saves the items for a given sale.
+    Accepts sale_details_list as a list of dictionaries:
+    [{'name': str, 'price': float, 'quantity': int}, ...]
+    """
     if not sale_id:
         logging.error("Attempted to save sale items with invalid SaleID.")
         return False
     conn = None
     items_to_insert = []
-    for name, details in sale_details.items():
+    for item_detail in sale_details_list:
         try:
-            price = details['price']
-            quantity = details['quantity']
+            name = item_detail['name']
+            price = item_detail['price']
+            quantity = item_detail['quantity']
             subtotal = price * quantity
             items_to_insert.append((sale_id, name, quantity, price, subtotal))
         except KeyError as ke:
-            logging.error(f"Missing key {ke} in sale_details for item '{name}' during save.")
+            logging.error(f"Missing key {ke} in sale_details for item during save: {item_detail}")
             continue # Skip this item
         except Exception as ex:
-            logging.exception(f"Unexpected error processing item '{name}' for saving.")
+            logging.exception(f"Unexpected error processing item for saving: {item_detail}")
             continue # Skip this item
 
     if not items_to_insert:
@@ -300,6 +305,7 @@ def save_sale_items_records(sale_id, sale_details):
         return False
     finally:
         if conn: conn.close()
+
 
 def fetch_sales_list_from_db(customer_name=None):
     """Fetches basic info for all sales, ordered oldest first. Optionally filters by customer name."""
@@ -400,28 +406,35 @@ def add_customer_to_db(name, contact=None, address=None):
     try:
         conn = sqlite3.connect(DATABASE_FILENAME)
         cursor = conn.cursor()
+        # Use INSERT OR IGNORE to handle cases where customer name might already exist due to case differences
+        # The UNIQUE constraint on CustomerName is case-insensitive due to COLLATE NOCASE
         cursor.execute("INSERT OR IGNORE INTO Customers (CustomerName, ContactNumber, Address) VALUES (?, ?, ?)",
                        (name, contact, address))
         conn.commit()
-        # Check if a row was actually inserted or ignored
+        # Check if a row was actually inserted or if it was ignored (meaning it already existed)
         if cursor.lastrowid != 0 or cursor.changes() > 0:
-            logging.info(f"Customer '{name}' added or already existed (ignored).")
+            logging.info(f"Customer '{name}' added to database.")
             success = True
         else:
-             # Check explicitly if it exists now (in case OR IGNORE didn't report change but name exists)
-             cursor.execute("SELECT 1 FROM Customers WHERE CustomerName = ? COLLATE NOCASE", (name,))
-             if cursor.fetchone():
-                 logging.info(f"Customer '{name}' already existed (checked after OR IGNORE).")
-                 success = True # It exists, so consider it a success
-             else:
-                 logging.error(f"Failed to ensure customer '{name}' in database for unknown reason (after OR IGNORE).")
-    except sqlite3.Error as e:
+            # If no changes, it means the customer (case-insensitively) already exists
+            logging.info(f"Customer '{name}' (or a case-variant) already exists in the database. Not added again.")
+            # We can consider this a "success" in the sense that the customer is in the DB.
+            # To be more precise, we can check if it exists.
+            cursor.execute("SELECT 1 FROM Customers WHERE CustomerName = ? COLLATE NOCASE", (name,))
+            if cursor.fetchone():
+                success = True # It exists
+            else:
+                # This case should be rare if INSERT OR IGNORE is working as expected with COLLATE NOCASE
+                logging.error(f"Failed to ensure customer '{name}' in database (after INSERT OR IGNORE).")
+
+    except sqlite3.Error as e: # Catch any other SQLite error
         if conn: conn.rollback()
         logging.exception(f"Error adding customer '{name}'.")
-        messagebox.showerror("Database Error", f"Could not add customer '{name}'.\nError: {e}", parent=None)
+        messagebox.showerror("Database Error", f"Could not add customer '{name}'.\nError: {e}", parent=None) # parent=None if called from non-GUI context
     finally:
         if conn: conn.close()
     return success
+
 
 def update_customer_in_db(customer_id, name, contact, address):
     """Updates details for an existing customer."""
@@ -444,7 +457,7 @@ def update_customer_in_db(customer_id, name, contact, address):
             logging.info(f"Updated customer ID {customer_id} to Name: '{name}'")
         else:
             logging.warning(f"Customer ID {customer_id} not found for update.")
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError: # Handles UNIQUE constraint violation for CustomerName
         if conn: conn.rollback()
         logging.warning(f"Update error for customer ID {customer_id}: Name '{name}' likely already exists.")
         messagebox.showerror("Update Error", f"Could not update customer.\nAnother customer with the name '{name}' might already exist.", parent=None)
@@ -511,8 +524,11 @@ def fetch_sales_stats(start_dt_str, end_dt_exclusive_str, customer_name=None):
             total_revenue = result_sales[0] if result_sales[0] is not None else 0.0
             num_sales = result_sales[1] if result_sales[1] is not None else 0
 
+        # For total_items, we need to use the params list that might include the customer_name
+        # The original params list is modified if customer_name is present.
+        # So, we use the same params list for the items query.
         query_items = f"SELECT COALESCE(SUM(Quantity), 0) {base_items_query} {customer_filter_sql}"
-        cursor.execute(query_items, params)
+        cursor.execute(query_items, params) # Use the potentially modified params
         result_items = cursor.fetchone()
         if result_items:
             total_items = result_items[0] if result_items[0] is not None else 0
@@ -521,7 +537,7 @@ def fetch_sales_stats(start_dt_str, end_dt_exclusive_str, customer_name=None):
 
     except sqlite3.Error as e:
         logging.exception(f"Error fetching sales stats ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name})")
-        return (0.0, 0, 0)
+        return (0.0, 0, 0) # Return default on error
     finally:
         if conn: conn.close()
 
@@ -572,7 +588,7 @@ def fetch_product_summary_by_date_range(start_dt_str, end_dt_exclusive_str, cust
         logging.debug(f"Fetched product summary ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name}). Found {len(summary_data)} products.")
     except sqlite3.Error as e:
         logging.exception(f"Error fetching product summary ({start_dt_str} to {end_dt_exclusive_str}, Customer: {customer_name})")
-        messagebox.showerror("Database Error", f"Could not fetch product summary.\nError: {e}")
+        messagebox.showerror("Database Error", f"Could not fetch product summary.\nError: {e}") # Keep messagebox for this one as it's a direct summary view
     finally:
         if conn: conn.close()
     return summary_data
@@ -593,6 +609,7 @@ def delete_sale_from_db(sale_id):
             logging.info(f"Deleted Sale ID {sale_id} and its items (via cascade) from database.")
         else:
             logging.warning(f"Sale ID {sale_id} not found in database for deletion.")
+            # No messagebox here, let caller handle UI.
     except sqlite3.Error as e:
         if conn: conn.rollback()
         logging.exception(f"Error deleting Sale ID {sale_id}.")
@@ -633,6 +650,7 @@ def fetch_sales_summary_by_customer(start_dt_str, end_dt_exclusive_str):
         logging.info(f"Fetched sales summary by customer for {start_dt_str} to {end_dt_exclusive_str}. Found {len(summary_data)} customers.")
     except sqlite3.Error as e:
         logging.exception(f"Error fetching sales summary by customer ({start_dt_str} to {end_dt_exclusive_str})")
+        # No messagebox, return empty list on error
     finally:
         if conn:
             conn.close()
@@ -680,6 +698,7 @@ def fetch_customer_purchase_details_by_date(customer_name, start_dt_str, end_dt_
         logging.info(f"Fetched {len(purchase_details)} purchase detail items for customer '{customer_name}' between {start_dt_str} and {end_dt_exclusive_str}.")
     except sqlite3.Error as e:
         logging.exception(f"Error fetching purchase details for customer '{customer_name}'")
+        # No messagebox
     finally:
         if conn:
             conn.close()
@@ -758,3 +777,53 @@ def fetch_latest_customer_name():
             conn.close()
     return customer_name
 
+# --- NEW FUNCTION for "View Today's Items" ---
+def fetch_sales_items_for_date(date_str):
+    """
+    Fetches aggregated sales items (product name, total quantity, total revenue) for a specific date.
+    Args:
+        date_str: The date for which to fetch items, in 'YYYY-MM-DD' format.
+    Returns:
+        A list of tuples: [(ProductName, TotalQuantity, TotalRevenue), ...],
+        or an empty list if no items or an error occurs.
+    """
+    conn = None
+    items_summary = []
+    try:
+        # Convert 'YYYY-MM-DD' to datetime objects for start and end of the day
+        target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+        start_dt = datetime.datetime.combine(target_date, datetime.time.min)
+        end_dt = datetime.datetime.combine(target_date + datetime.timedelta(days=1), datetime.time.min)
+
+        start_dt_iso = start_dt.isoformat()
+        end_dt_iso = end_dt.isoformat() # Exclusive end
+
+        conn = sqlite3.connect(DATABASE_FILENAME)
+        cursor = conn.cursor()
+        query = """
+            SELECT
+                si.ProductName,
+                SUM(si.Quantity) as TotalQuantity,
+                SUM(si.Subtotal) as TotalRevenue
+            FROM SaleItems si
+            JOIN Sales s ON si.SaleID = s.SaleID
+            WHERE s.SaleTimestamp >= ? AND s.SaleTimestamp < ?
+            GROUP BY si.ProductName
+            ORDER BY si.ProductName COLLATE NOCASE
+        """
+        params = [start_dt_iso, end_dt_iso]
+        cursor.execute(query, params)
+        items_summary = cursor.fetchall()
+        logging.info(f"Fetched {len(items_summary)} distinct item summaries for date {date_str}.")
+
+    except ValueError:
+        logging.error(f"Invalid date format provided to fetch_sales_items_for_date: {date_str}")
+    except sqlite3.Error as e:
+        logging.exception(f"Database error fetching sales items for date {date_str}: {e}")
+        # Optionally, show a messagebox if this function is directly tied to a UI action that expects immediate user feedback for DB errors.
+        # However, for backend functions, usually logging and returning an empty list/None is preferred.
+        # messagebox.showerror("Database Error", f"Could not fetch item summary for {date_str}.\nError: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return items_summary
