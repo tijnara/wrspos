@@ -19,7 +19,8 @@ except ImportError:
 # --- Import Project Modules ---
 import db_operations
 import gui_utils # Import the new utils module
-# --- REMOVED: Import of CustomerPurchaseDetailWindow ---
+# --- Import the detail window ---
+# Commented out as Customer Summary was removed, uncomment if re-added
 # from gui_customer_purchase_details import CustomerPurchaseDetailWindow
 
 # --- Sales History Window Class ---
@@ -39,41 +40,43 @@ class SalesHistoryWindow(tk.Toplevel):
                                   parent=self.parent)
 
         win_width = 850
-        # Adjusted height back as Customer Summary section is removed
-        win_height = 750
+        win_height = 700 # Reduced height as filter and treeview removed
         self.geometry(f"{win_width}x{win_height}")
-        self.minsize(700, 600) # Adjusted min height
+        self.minsize(700, 550) # Adjusted min height
         gui_utils.center_window(self, win_width, win_height) # Center the window
 
         # --- Configure Grid Layout ---
-        self.columnconfigure(0, weight=2) # Sales List column
-        self.columnconfigure(1, weight=1) # Receipt Details column
-        self.rowconfigure(1, weight=1) # Sales list row
-        self.rowconfigure(2, weight=0) # Filter row
-        self.rowconfigure(3, weight=0) # Default summary row
-        self.rowconfigure(4, weight=0) # Custom date entry row
-        self.rowconfigure(5, weight=1) # Custom product summary tree row
-        self.rowconfigure(6, weight=0) # Custom product total row
-        # --- REMOVED Customer Summary Rows ---
-        # self.rowconfigure(7, weight=1) # Customer summary tree row
-        # self.rowconfigure(8, weight=0) # Customer summary export button row
-        # --- Adjusted Action Buttons Row ---
-        self.rowconfigure(7, weight=0) # Action Buttons row (was 9)
+        self.columnconfigure(0, weight=1) # Make main column expandable
+        self.columnconfigure(1, weight=1)
+        # Row configuration (adjust weights as needed)
+        self.rowconfigure(1, weight=1) # Sales list/Receipt area (more weight)
+        # --- REMOVED Filter Row ---
+        # self.rowconfigure(2, weight=0) # Filter row
+        # --- Adjusted Rows ---
+        self.rowconfigure(2, weight=0) # Today's Sales row (was 3)
+        self.rowconfigure(3, weight=0) # Default summary row (was 4)
+        self.rowconfigure(4, weight=0) # Separator (was 5)
+        self.rowconfigure(5, weight=0) # Custom date entry (was 6)
+        self.rowconfigure(6, weight=1) # Custom product summary tree (was 7)
+        self.rowconfigure(7, weight=0) # Custom product total (was 8)
+        self.rowconfigure(8, weight=0) # Separator (was 9)
+        self.rowconfigure(9, weight=0) # Action Buttons (was 10)
 
 
         # --- Widgets ---
         self._setup_labels()
         self._setup_sales_list_tree()
         self._setup_receipt_display()
-        self._setup_filter_controls()
-        self._setup_default_summaries()
-        self._setup_custom_date_entry()
-        self._setup_product_summary_tree()
-        self._setup_product_summary_totals()
-        # --- REMOVED Calls to setup customer summary ---
-        # self._setup_customer_summary_tree()
-        # self._setup_customer_summary_export()
-        self._setup_action_buttons() # Adjusted row
+        # --- REMOVED Filter Setup ---
+        # self._setup_filter_controls()
+        self._setup_today_sales_label() # Row 2
+        self._setup_default_summaries() # Row 3 - Modified
+        ttk.Separator(self, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky='ew', padx=10, pady=10) # Row 4
+        self._setup_custom_date_entry() # Row 5
+        self._setup_product_summary_tree() # Row 6
+        self._setup_product_summary_totals() # Row 7
+        ttk.Separator(self, orient='horizontal').grid(row=8, column=0, columnspan=2, sticky='ew', padx=10, pady=10) # Row 8
+        self._setup_action_buttons() # Row 9
 
 
         # Initial data population
@@ -90,11 +93,12 @@ class SalesHistoryWindow(tk.Toplevel):
     # --- UI Setup Methods ---
 
     def _setup_labels(self):
-        ttk.Label(self, text="Sales List", font=("Arial", 14, "bold")).grid(row=0, column=0, pady=10, padx=10, sticky="w")
-        ttk.Label(self, text="Receipt Details", font=("Arial", 14, "bold")).grid(row=0, column=1, pady=10, padx=10, sticky="w")
+        title_font = ("Arial", 13, "bold")
+        ttk.Label(self, text="Sales List", font=title_font).grid(row=0, column=0, pady=(10, 5), padx=10, sticky="w")
+        ttk.Label(self, text="Receipt Details", font=title_font).grid(row=0, column=1, pady=(10, 5), padx=10, sticky="w")
 
     def _setup_sales_list_tree(self):
-        list_frame = ttk.Frame(self)
+        list_frame = ttk.Frame(self, padding=(5, 0, 0, 0))
         list_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=5)
         list_frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
@@ -117,7 +121,7 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)
 
     def _setup_receipt_display(self):
-        text_frame = ttk.Frame(self)
+        text_frame = ttk.Frame(self, padding=(0, 0, 5, 0))
         text_frame.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=5)
         text_frame.rowconfigure(0, weight=1)
         text_frame.columnconfigure(0, weight=1)
@@ -127,50 +131,47 @@ class SalesHistoryWindow(tk.Toplevel):
         self.receipt_text.configure(yscrollcommand=receipt_text_scrollbar.set)
         receipt_text_scrollbar.grid(row=0, column=1, sticky="ns")
 
-    def _setup_filter_controls(self):
-        filter_frame = ttk.Frame(self, padding="5")
-        filter_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(5,0))
-        filter_frame.columnconfigure(1, weight=1)
-        ttk.Label(filter_frame, text="Filter by Customer:").grid(row=0, column=0, padx=(0, 5), sticky="w")
-        customer_list = ["All Customers"] + sorted([c for c in db_operations.fetch_distinct_customer_names() if c != 'N/A'])
-        self.filter_customer_var = tk.StringVar(value="All Customers")
-        self.filter_customer_combo = ttk.Combobox(filter_frame, textvariable=self.filter_customer_var, values=customer_list, state="readonly", width=30)
-        self.filter_customer_combo.grid(row=0, column=1, padx=5, sticky="ew")
-        filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.apply_filters)
-        filter_button.grid(row=0, column=2, padx=(10, 0))
+    # --- REMOVED: Filter Setup ---
+    # def _setup_filter_controls(self): ...
 
+    def _setup_today_sales_label(self):
+        today_frame = ttk.Frame(self, padding=(10, 5, 10, 5))
+        # Use adjusted row
+        today_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10)
+        today_frame.columnconfigure(0, weight=1)
+
+        self.today_sales_var = tk.StringVar(value="Today's Sales: Calculating...")
+        today_label = ttk.Label(today_frame, textvariable=self.today_sales_var, font=("Arial", 11, "bold"))
+        today_label.grid(row=0, column=0, sticky="e")
+
+    # --- MODIFIED: Simplified Weekly Summary UI ---
     def _setup_default_summaries(self):
-        """Sets up the section for the default weekly summary, including item breakdown."""
-        summary_frame = ttk.LabelFrame(self, text="Default Summary", padding="10")
-        summary_frame.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=10, pady=(10, 5))
-        summary_frame.columnconfigure(0, weight=1)
-        summary_frame.rowconfigure(0, weight=1)
-
-        week_frame = ttk.Frame(summary_frame)
-        week_frame.grid(row=0, column=0, sticky="nsew")
-        week_frame.columnconfigure(0, weight=1)
-        week_frame.rowconfigure(1, weight=1)
+        """Sets up the section for the default weekly summary using labels."""
+        summary_frame = ttk.LabelFrame(self, text="Weekly Summary", padding="10")
+        # Use adjusted row
+        summary_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
+        summary_frame.columnconfigure(0, weight=1) # Allow labels to expand/align left
+        summary_frame.columnconfigure(1, weight=1) # Allow labels to expand/align right
 
         self.week_label_var = tk.StringVar(value="This Week:")
-        ttk.Label(week_frame, textvariable=self.week_label_var, font=("Arial", 11, "bold")).grid(row=0, column=0, sticky="w", padx=5, pady=(0,2))
-        self.week_total_label = ttk.Label(week_frame, text=f"Total Sales: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10))
-        self.week_total_label.grid(row=0, column=1, sticky="e", padx=5, pady=(0,2))
+        ttk.Label(summary_frame, textvariable=self.week_label_var, font=("Arial", 11, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(0,2))
 
-        self.week_items_tree = ttk.Treeview(week_frame, columns=('product', 'qty'), show='headings', height=5)
-        self.week_items_tree.heading('product', text='Product')
-        self.week_items_tree.heading('qty', text='Qty Sold')
-        self.week_items_tree.column('product', anchor=tk.W, width=250, stretch=True)
-        self.week_items_tree.column('qty', anchor=tk.CENTER, width=60, stretch=False)
-        week_scroll = ttk.Scrollbar(week_frame, orient="vertical", command=self.week_items_tree.yview)
-        self.week_items_tree.configure(yscrollcommand=week_scroll.set)
+        # Label for Total Sales
+        self.week_total_label = ttk.Label(summary_frame, text=f"Total Sales: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10))
+        self.week_total_label.grid(row=1, column=0, sticky="w", padx=5, pady=1)
 
-        self.week_items_tree.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=(2,0))
-        week_scroll.grid(row=1, column=2, sticky="ns", pady=(2,0))
+        # Label for Total Items
+        self.week_items_label = ttk.Label(summary_frame, text="Total Items Sold: 0", font=("Arial", 10))
+        self.week_items_label.grid(row=1, column=1, sticky="e", padx=5, pady=1)
+
+        # --- REMOVED: Weekly Items Treeview ---
+        # self.week_items_tree = ...
 
     def _setup_custom_date_entry(self):
         """Sets up the custom date range selection using DateEntry widgets."""
-        custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10")
-        custom_entry_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
+        custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range Summary", padding="10")
+        # Use adjusted row
+        custom_entry_frame.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=5)
         custom_entry_frame.columnconfigure(1, weight=0)
         custom_entry_frame.columnconfigure(3, weight=0)
         custom_entry_frame.columnconfigure(4, weight=1)
@@ -196,15 +197,16 @@ class SalesHistoryWindow(tk.Toplevel):
             ttk.Label(custom_entry_frame, text="(tkcalendar needed)").grid(row=1, column=3)
 
         view_range_button_state = tk.NORMAL if DateEntry else tk.DISABLED
-        view_range_button = ttk.Button(custom_entry_frame, text="View Detailed Summary",
+        view_range_button = ttk.Button(custom_entry_frame, text="View Summary",
                                        command=self.update_custom_summaries,
                                        state=view_range_button_state)
         view_range_button.grid(row=0, column=4, padx=(10, 5), pady=5, sticky='e')
 
 
     def _setup_product_summary_tree(self):
-        custom_summary_tree_frame = ttk.LabelFrame(self, text="Product Summary (Custom Date Range)", padding="5")
-        custom_summary_tree_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
+        # Use adjusted row
+        custom_summary_tree_frame = ttk.LabelFrame(self, text="Product Summary (Custom Date Range)", padding="10")
+        custom_summary_tree_frame.grid(row=6, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
         custom_summary_tree_frame.rowconfigure(0, weight=1)
         custom_summary_tree_frame.columnconfigure(0, weight=1)
         self.summary_columns = ('product', 'total_qty', 'total_revenue')
@@ -222,49 +224,55 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.bind("<Double-Button-1>", self.on_summary_item_select)
 
     def _setup_product_summary_totals(self):
-        custom_total_frame = ttk.Frame(self)
-        custom_total_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,5))
+        # Use adjusted row
+        custom_total_frame = ttk.Frame(self, padding=(10,0,10,5))
+        custom_total_frame.grid(row=7, column=0, columnspan=2, sticky="ew", padx=10)
         custom_total_frame.columnconfigure(0, weight=1)
         custom_total_frame.columnconfigure(1, weight=1)
 
         self.custom_range_items_label = ttk.Label(custom_total_frame, text="Items: 0", font=("Arial", 10))
-        self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5)
+        self.custom_range_items_label.grid(row=0, column=0, sticky="w")
 
         self.custom_range_grand_total_label = ttk.Label(custom_total_frame, text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 10, "bold"))
-        self.custom_range_grand_total_label.grid(row=0, column=1, sticky="e", padx=(10,0))
+        self.custom_range_grand_total_label.grid(row=0, column=1, sticky="e")
         export_summary_button = ttk.Button(custom_total_frame, text="Export Product Summary", command=self.export_summary_to_csv)
-        export_summary_button.grid(row=1, column=1, sticky="e", padx=(10, 0), pady=(2,0))
+        export_summary_button.grid(row=1, column=1, sticky="e", pady=(2,0))
 
     # --- REMOVED: Customer Summary UI Setup ---
-    # def _setup_customer_summary_tree(self): ...
-    # def _setup_customer_summary_export(self): ...
 
     def _setup_action_buttons(self):
         # --- Adjusted Row ---
-        action_button_frame = ttk.Frame(self)
-        action_button_frame.grid(row=7, column=0, columnspan=2, pady=10) # Changed row to 7
+        action_button_frame = ttk.Frame(self, padding=(10, 5))
+        action_button_frame.grid(row=9, column=0, columnspan=2, pady=10) # Changed row to 9
         export_sales_button = ttk.Button(action_button_frame, text="Export Sales List", command=self.export_sales_to_csv)
         delete_button = ttk.Button(action_button_frame, text="Delete Selected Sale", command=self.delete_selected_sale)
         close_button = ttk.Button(action_button_frame, text="Close", command=self.destroy)
-        export_sales_button.pack(side=tk.LEFT, padx=10)
-        delete_button.pack(side=tk.LEFT, padx=10)
-        close_button.pack(side=tk.LEFT, padx=10)
+        action_button_frame.columnconfigure(0, weight=1)
+        action_button_frame.columnconfigure(1, weight=1)
+        action_button_frame.columnconfigure(2, weight=1)
+        export_sales_button.grid(row=0, column=0, padx=5)
+        delete_button.grid(row=0, column=1, padx=5)
+        close_button.grid(row=0, column=2, padx=5)
+
 
     # --- Logic Methods ---
 
+    # --- MODIFIED: apply_filters no longer uses filter_var ---
     def apply_filters(self):
-        """Applies the selected customer filter and refreshes the views."""
-        logging.info(f"Applying filters. Selected customer: {self.filter_customer_var.get()}")
-        self.populate_sales_list()
+        """Refreshes the data displayed in the window."""
+        logging.info("Refreshing history window data.")
+        self.populate_sales_list() # Now always shows all sales
         self.update_default_summaries()
         self.update_custom_summaries()
 
+    # --- MODIFIED: populate_sales_list ignores filter_var ---
     def populate_sales_list(self):
-        """Fetches sales based on filter and populates the sales Treeview."""
-        selected_customer = self.filter_customer_var.get()
-        logging.debug(f"Populating sales list for customer: {selected_customer}")
+        """Fetches all sales and populates the sales Treeview."""
+        # selected_customer = self.filter_customer_var.get() # No longer needed
+        logging.debug("Populating sales list for ALL customers.")
         for i in self.sales_tree.get_children(): self.sales_tree.delete(i)
-        sales_data = db_operations.fetch_sales_list_from_db(customer_name=selected_customer)
+        # Fetch all sales by passing None or not passing customer_name
+        sales_data = db_operations.fetch_sales_list_from_db(customer_name=None)
         if sales_data:
             receipt_counter = 0
             for sale in sales_data:
@@ -276,11 +284,23 @@ class SalesHistoryWindow(tk.Toplevel):
                 self.sales_tree.insert("", 0, values=(sale_id, receipt_counter, display_ts, customer_name_db, total_display), iid=sale_id)
         self.update_receipt_display("")
 
+    # --- MODIFIED: Update Default Summaries Logic ---
     def update_default_summaries(self):
-        """Calculates and displays weekly sales total and item breakdown."""
-        selected_customer = self.filter_customer_var.get() # Filter applies here
-        logging.debug(f"Updating default summaries for customer: {selected_customer}")
+        """Calculates and displays weekly and today's sales totals and total items."""
+        # selected_customer = self.filter_customer_var.get() # No longer needed for weekly
+        logging.debug("Updating default summaries (Today and This Week).")
         today = datetime.date.today()
+
+        # --- Today ---
+        start_today_dt = datetime.datetime.combine(today, datetime.time.min)
+        end_today_dt = start_today_dt + datetime.timedelta(days=1)
+        start_today_str = start_today_dt.isoformat()
+        end_today_str = end_today_dt.isoformat()
+        today_revenue, today_items, _ = db_operations.fetch_sales_stats(start_today_str, end_today_str, customer_name=None) # No filter for today
+        self.today_sales_var.set(f"Today's Sales ({today.strftime('%Y-%m-%d')}): {gui_utils.CURRENCY_SYMBOL}{today_revenue:.2f} ({today_items} items)") # Added items
+        logging.debug(f"Today's total sales: {today_revenue:.2f}, Items: {today_items}")
+
+        # --- This Week ---
         start_of_week = today + relativedelta(weekday=MO(-1))
         end_of_week = start_of_week + relativedelta(days=6)
         date_format_display = "%Y-%m-%d"
@@ -288,27 +308,19 @@ class SalesHistoryWindow(tk.Toplevel):
         end_week_dt_str = (datetime.datetime.combine(end_of_week, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
         week_range_str = f"{start_of_week.strftime(date_format_display)} to {end_of_week.strftime(date_format_display)}"
 
-        week_revenue, _, _ = db_operations.fetch_sales_stats(start_week_dt_str, end_week_dt_str, customer_name=selected_customer)
-
+        # Fetch weekly stats (no customer filter)
+        week_revenue, week_items, _ = db_operations.fetch_sales_stats(start_week_dt_str, end_week_dt_str, customer_name=None)
         self.week_label_var.set(f"This Week ({week_range_str}):")
         self.week_total_label.config(text=f"Total Sales: {gui_utils.CURRENCY_SYMBOL}{week_revenue:.2f}")
+        self.week_items_label.config(text=f"Total Items Sold: {week_items}") # Update new label
 
-        week_item_data = db_operations.fetch_product_summary_by_date_range(start_week_dt_str, end_week_dt_str, customer_name=selected_customer)
-        self._populate_default_summary_tree(self.week_items_tree, week_item_data)
+        # --- REMOVED: Fetching and populating weekly item breakdown ---
+        # week_item_data = db_operations.fetch_product_summary_by_date_range(...)
+        # self._populate_default_summary_tree(...)
 
         logging.debug("Default summaries updated.")
 
-    def _populate_default_summary_tree(self, treeview, item_data):
-        """Clears and populates a default summary treeview (week or month)."""
-        for i in treeview.get_children():
-            treeview.delete(i)
-
-        if item_data:
-            for product_name, total_qty, _ in item_data: # Ignore total revenue here
-                treeview.insert("", tk.END, values=(product_name, total_qty))
-        else:
-            treeview.insert("", tk.END, values=("No items sold", ""))
-
+    # --- REMOVED: _populate_default_summary_tree ---
 
     def update_custom_summaries(self):
         """Updates the product custom summary based on date range from DateEntry."""
@@ -332,8 +344,6 @@ class SalesHistoryWindow(tk.Toplevel):
             end_date_dt_str = (datetime.datetime.combine(end_date, datetime.time.min) + datetime.timedelta(days=1)).isoformat()
 
             self._update_product_summary_display(start_date_dt_str, end_date_dt_str)
-            # --- REMOVED Call to update customer summary ---
-            # self._update_customer_summary_display(start_date_dt_str, end_date_dt_str)
 
         except Exception as e:
              logging.exception("Error calculating custom summaries.")
@@ -361,8 +371,6 @@ class SalesHistoryWindow(tk.Toplevel):
         logging.debug("Product summary display updated.")
 
     # --- REMOVED: Customer Summary Update Logic ---
-    # def _update_customer_summary_display(self, start_dt_str, end_dt_str): ...
-
 
     def on_sale_select(self, event=None):
         """Handles selection change in the sales Treeview to display receipt."""
