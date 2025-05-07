@@ -7,13 +7,17 @@ ICON_FILENAME = "oceans.ico" # Using the requested icon name
 MIN_BUTTON_WIDTH = 100 # Minimum width in pixels for product buttons
 CURRENCY_SYMBOL = "₱" # Moved from db_operations for easier GUI access if needed elsewhere
 
-# --- Key Product Names for UI ---
+# --- Key Product Names for UI ---\
 # Define names used for specific buttons/shortcuts here
 # IMPORTANT: These MUST exactly match the ProductName in the database
 PRODUCT_REFILL_20 = "Refill (20)"
 PRODUCT_REFILL_25 = "Refill (25)"
 PRODUCT_CUSTOM_SALE = "Custom Sale" # Name of the button that triggers custom price dialog
 PRODUCT_CONTAINER = "Container" # Example if you want to prioritize this too
+
+# --- NEW CONSTANT for dynamic button layout ---
+APPROX_PRODUCT_BUTTON_WIDTH_WITH_SPACING = 120 # Estimated total width a button needs (button width + horizontal spacing)
+
 
 # --- Helper Function to Center Windows ---
 def center_window(window, width=None, height=None):
@@ -56,4 +60,3 @@ def set_window_icon(window):
              logging.exception(f"Unexpected error setting icon for {window.title()}.") # Log traceback
     else:
          logging.warning(f"Icon file '{ICON_FILENAME}' not found for window '{window.title()}'.")
-

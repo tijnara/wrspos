@@ -4,31 +4,31 @@ from tkinter import messagebox
 from tkinter import simpledialog
 import datetime
 import os
-import sqlite3 # Keep for potential direct use or error catching if needed
+# import sqlite3 # Not directly used here
 
-# Import helpers and db operations
 import db_operations
-import gui_utils # Import the new utils module
+import gui_utils
+
 
 # --- Custom Dialog for Price Input ---
 class PriceInputDialog(tk.Toplevel):
     def __init__(self, parent, title, prompt, initialvalue=None):
         super().__init__(parent)
         self.title(title)
-        gui_utils.set_window_icon(self) # Set icon
-        self.result = None # Store the entered price
+        gui_utils.set_window_icon(self)
+        self.result = None
 
         dialog_width = 300
         dialog_height = 130
-        # Use helper function to center relative to parent
         gui_utils.center_window(self, dialog_width, dialog_height)
 
         self.transient(parent)
         self.grab_set()
-        self.resizable(False, False)
-        self.columnconfigure(0, weight=1)
+        self.resizable(False, False)  # Typically, small input dialogs are fixed size
+        self.columnconfigure(0, weight=1)  # Allow entry to expand if window were resizable
 
-        ttk.Label(self, text=prompt, wraplength=dialog_width - 20).grid(row=0, column=0, padx=10, pady=(10, 5), sticky='w')
+        ttk.Label(self, text=prompt, wraplength=dialog_width - 20).grid(row=0, column=0, padx=10, pady=(10, 5),
+                                                                        sticky='w')
 
         self.price_var = tk.StringVar()
         if initialvalue is not None:
@@ -58,12 +58,12 @@ class PriceInputDialog(tk.Toplevel):
         if P == "": return True
         try:
             if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
-                 if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):
-                     return False
-                 return True
+                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):  # Prevent "07"
+                    return False
+                return True
             else:
                 return False
-        except ValueError:
+        except ValueError:  # Should not happen with the checks above but good practice
             return False
 
     def on_ok(self):
@@ -78,7 +78,8 @@ class PriceInputDialog(tk.Toplevel):
             self.result = price
             self.destroy()
         except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid non-negative number for the price.", parent=self)
+            messagebox.showerror("Invalid Input", "Please enter a valid non-negative number for the price.",
+                                 parent=self)
 
     def on_cancel(self):
         self.result = None
@@ -94,125 +95,120 @@ class CustomerSelectionDialog(tk.Toplevel):
         gui_utils.set_window_icon(self)
 
         dialog_width = 350
-        dialog_height = 250 # Increased height for listbox
+        dialog_height = 300  # Increased height for listbox, can be resized
         self.result = None
-        # Use helper function to center relative to parent
         gui_utils.center_window(self, dialog_width, dialog_height)
 
         self.transient(parent)
         self.grab_set()
+
+        # Make this dialog resizable
+        self.resizable(True, True)
+        self.minsize(dialog_width, 250)  # Set a minimum practical size
+
+        # Configure main column and listbox row to expand
         self.columnconfigure(0, weight=1)
-        # Configure rows: Label, Entry, Listbox (expandable), Buttons
-        self.rowconfigure(2, weight=1) # Allow listbox row to expand
+        self.rowconfigure(2, weight=1)  # Listbox frame row
 
         ttk.Label(self, text="Enter or select customer name:").grid(row=0, column=0, pady=(10, 2), padx=10, sticky='w')
 
-        # Fetch and store the full list initially
         self.all_customer_names = db_operations.fetch_distinct_customer_names()
-        # Remove 'N/A' from suggestions if present, handle it separately
         if 'N/A' in self.all_customer_names:
             self.all_customer_names.remove('N/A')
 
         self.customer_var = tk.StringVar()
-        # Use Entry instead of Combobox
         self.customer_entry = ttk.Entry(self, textvariable=self.customer_var, width=40)
-        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')
+        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')  # Entry expands horizontally
         self.customer_entry.focus_set()
-
-        # Bind key release event to update suggestions
         self.customer_entry.bind('<KeyRelease>', self.update_suggestions)
 
-        # Frame for Listbox and Scrollbar
-        list_frame = ttk.Frame(self)
-        # Place the list frame in row 2
-        list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')
-        list_frame.rowconfigure(0, weight=1)
-        list_frame.columnconfigure(0, weight=1)
+        # Frame for Listbox and Scrollbar (this frame will contain the listbox)
+        self.list_frame = ttk.Frame(self)  # Store as instance variable
+        self.list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')  # Frame expands
+        self.list_frame.rowconfigure(0, weight=1)  # Row inside list_frame expands
+        self.list_frame.columnconfigure(0, weight=1)  # Column inside list_frame expands
 
-        # Listbox for suggestions
-        self.suggestion_listbox = tk.Listbox(list_frame, height=5, exportselection=False) # Limit initial height
-        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')
-        self.suggestion_listbox.bind('<Double-Button-1>', self.on_suggestion_select) # Bind double-click
-        self.suggestion_listbox.bind('<Return>', self.on_suggestion_select) # Bind Enter key
+        self.suggestion_listbox = tk.Listbox(self.list_frame, height=5, exportselection=False)
+        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')  # Listbox expands within its frame
+        self.suggestion_listbox.bind('<Double-Button-1>', self.on_suggestion_select)
+        self.suggestion_listbox.bind('<Return>', self.on_suggestion_select)
 
-        # Scrollbar for Listbox
-        list_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.suggestion_listbox.yview)
+        list_scrollbar = ttk.Scrollbar(self.list_frame, orient="vertical", command=self.suggestion_listbox.yview)
         self.suggestion_listbox.configure(yscrollcommand=list_scrollbar.set)
         list_scrollbar.grid(row=0, column=1, sticky='ns')
 
-        # Initially hide the listbox frame
-        list_frame.grid_remove()
-        self.list_frame = list_frame # Store reference to hide/show
+        self.list_frame.grid_remove()  # Initially hide
 
-        # Button frame
+        # Button frame (Row 3)
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=3, column=0, pady=10) # Buttons now on row 3
+        button_frame.grid(row=3, column=0, pady=10)
         ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_button.pack(side=tk.LEFT, padx=10)
 
-        self.bind('<Return>', lambda event=None: self.on_ok()) # Global return still works for OK
+        self.bind('<Return>', lambda event=None: self.on_ok())
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
         self.wait_window(self)
 
     def update_suggestions(self, event=None):
         """Filter customer list based on typed text and show in listbox."""
-        # --- FIX: Define typed_lower near the top ---
         current_text = self.customer_var.get()
-        typed_lower = current_text.lower() # Define it here
-        cursor_pos = self.customer_entry.index(tk.INSERT) # Get cursor position from Entry
+        typed_lower = current_text.lower()
 
-        # Ignore navigation/modifier keys
-        if event and hasattr(event, 'keysym') and len(event.keysym) > 1 and event.keysym not in ('BackSpace', 'Delete'):
-             if not event.keysym.startswith('F'):
-                 return
+        # Simplified key check, primarily for printable chars and backspace/delete
+        if event and event.keysym and len(event.keysym) > 1 and event.keysym not in ('BackSpace', 'Delete', 'Shift_L',
+                                                                                     'Shift_R', 'Control_L',
+                                                                                     'Control_R'):
+            if not event.keysym.startswith('F'):  # Allow F-keys
+                return
 
-        self.suggestion_listbox.delete(0, tk.END) # Clear previous suggestions
+        self.suggestion_listbox.delete(0, tk.END)
 
         if not current_text:
-            self.list_frame.grid_remove() # Hide if empty
+            self.list_frame.grid_remove()
             return
 
-        # Filter names STARTING WITH the typed text
         suggestions = [name for name in self.all_customer_names if name.lower().startswith(typed_lower)]
 
         if suggestions:
-            for name in suggestions[:10]: # Limit to 10 suggestions
+            for name in suggestions[:10]:
                 self.suggestion_listbox.insert(tk.END, name)
-            self.list_frame.grid() # Show the listbox frame
+            self.list_frame.grid()  # Show the listbox frame
         else:
-            self.list_frame.grid_remove() # Hide if no suggestions
+            self.list_frame.grid_remove()
 
     def on_suggestion_select(self, event=None):
         """Update entry field when a suggestion is clicked or Enter is pressed on listbox."""
         selection_indices = self.suggestion_listbox.curselection()
         if selection_indices:
             selected_name = self.suggestion_listbox.get(selection_indices[0])
-            self.customer_var.set(selected_name) # Update the entry field text
-            self.list_frame.grid_remove() # Hide listbox after selection
-            self.customer_entry.icursor(tk.END) # Move cursor to end
-            self.customer_entry.focus_set() # Keep focus on entry
+            self.customer_var.set(selected_name)
+            self.list_frame.grid_remove()
+            self.customer_entry.icursor(tk.END)
+            self.customer_entry.focus_set()
 
     def on_ok(self):
         """Handle OK button click. Add new customer if necessary."""
-        selected_name = self.customer_var.get().strip() # Get text from entry
+        selected_name = self.customer_var.get().strip()
         if not selected_name:
-            self.result = "N/A"
+            self.result = "N/A"  # Default to N/A if empty
         else:
             self.result = selected_name
             is_new = True
-            # Fetch fresh list to double-check before adding
             current_db_names = db_operations.fetch_distinct_customer_names()
             for existing_name in current_db_names:
                 if selected_name.lower() == existing_name.lower():
                     is_new = False
+                    self.result = existing_name  # Use the existing cased name
                     break
             if is_new and selected_name != 'N/A':
-                print(f"Adding new customer from dialog: {selected_name}")
+                logging.info(f"Adding new customer from dialog: {selected_name}")
                 if not db_operations.add_customer_to_db(selected_name, None, None):
-                    print(f"Warning: Could not add new customer '{selected_name}' via dialog.")
-                    pass
+                    logging.warning(f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")
+                    # Optionally show error, or let db_operations handle it
+                    # For now, we proceed with the name entered by user even if DB add failed.
+                    # Caller should be aware.
         self.destroy()
 
     def on_cancel(self):
@@ -227,22 +223,24 @@ class CustomPriceDialog(tk.Toplevel):
         self.parent = parent
         self.product_names = product_names
         self.title("Add Custom Price Item")
-        gui_utils.set_window_icon(self) # Use helper function
+        gui_utils.set_window_icon(self)
         self.result = None
 
         dialog_width = 350
         dialog_height = 210
-        # Use helper function to center relative to parent
         gui_utils.center_window(self, dialog_width, dialog_height)
 
         self.transient(parent)
         self.grab_set()
-        self.columnconfigure(1, weight=1) # Allow entry/combobox to expand
+        self.resizable(False, False)  # Typically, small input dialogs are fixed size
 
-        # Widgets
+        # Configure columns for expansion if it were resizable
+        self.columnconfigure(1, weight=1)  # Allow entry/combobox to expand
+
         ttk.Label(self, text="Product:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
         self.product_var = tk.StringVar()
-        self.product_combobox = ttk.Combobox(self, textvariable=self.product_var, values=self.product_names, state="readonly")
+        self.product_combobox = ttk.Combobox(self, textvariable=self.product_var, values=self.product_names,
+                                             state="readonly")
         if self.product_names:
             self.product_var.set(self.product_names[0])
         self.product_combobox.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
@@ -253,18 +251,16 @@ class CustomPriceDialog(tk.Toplevel):
         self.price_entry = ttk.Entry(self, textvariable=self.price_var, validate='key', validatecommand=vcmd_price)
         self.price_entry.grid(row=1, column=1, padx=10, pady=5, sticky='ew')
 
-        # Quantity Entry
         ttk.Label(self, text="Quantity:").grid(row=2, column=0, padx=10, pady=5, sticky='w')
-        self.qty_var = tk.StringVar(value='1') # Default quantity to 1
+        self.qty_var = tk.StringVar(value='1')
         vcmd_qty = (self.register(self.validate_quantity), '%P')
         self.qty_entry = ttk.Entry(self, textvariable=self.qty_var, validate='key', validatecommand=vcmd_qty, width=5)
-        self.qty_entry.grid(row=2, column=1, padx=10, pady=5, sticky='w') # Align left
+        self.qty_entry.grid(row=2, column=1, padx=10, pady=5, sticky='w')
 
-        self.price_entry.focus_set() # Focus on price entry initially
+        self.price_entry.focus_set()
 
-        # Button frame
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=15) # Moved down
+        button_frame.grid(row=3, column=0, columnspan=2, pady=15)
         ok_button = ttk.Button(button_frame, text="Add to Sale", command=self.on_ok)
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
@@ -279,7 +275,9 @@ class CustomPriceDialog(tk.Toplevel):
         if P == "": return True
         try:
             if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
-                 return True
+                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):  # Prevent "07"
+                    return False
+                return True
             else:
                 return False
         except ValueError:
@@ -287,8 +285,8 @@ class CustomPriceDialog(tk.Toplevel):
 
     def validate_quantity(self, P):
         """Allow only positive integers for quantity."""
-        if P == "": return True # Allow empty
-        if P.isdigit() and int(P) > 0: # Check if it's digits and greater than 0
+        if P == "": return True
+        if P.isdigit() and int(P) > 0:
             return True
         else:
             return False
@@ -302,11 +300,11 @@ class CustomPriceDialog(tk.Toplevel):
             messagebox.showwarning("Missing Product", "Please select a product.", parent=self)
             return
         if not price_str:
-             messagebox.showwarning("Missing Price", "Please enter a custom price.", parent=self)
-             return
+            messagebox.showwarning("Missing Price", "Please enter a custom price.", parent=self)
+            return
         if not qty_str:
-             messagebox.showwarning("Missing Quantity", "Please enter a quantity.", parent=self)
-             return
+            messagebox.showwarning("Missing Quantity", "Please enter a quantity.", parent=self)
+            return
 
         try:
             custom_price = float(price_str)
@@ -319,10 +317,10 @@ class CustomPriceDialog(tk.Toplevel):
             quantity = int(qty_str)
             if quantity <= 0: raise ValueError("Quantity must be positive.")
         except ValueError:
-             messagebox.showerror("Invalid Quantity", "Please enter a valid positive whole number for the quantity.", parent=self)
-             return
+            messagebox.showerror("Invalid Quantity", "Please enter a valid positive whole number for the quantity.",
+                                 parent=self)
+            return
 
-        # Store all three values in the result
         self.result = (product_name, custom_price, quantity)
         self.destroy()
 

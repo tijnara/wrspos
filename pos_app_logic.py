@@ -19,17 +19,12 @@ except ImportError:
 
 # --- Import Project Modules ---
 import db_operations
-import gui_utils
+import gui_utils  # gui_utils will now provide APPROX_PRODUCT_BUTTON_WIDTH_WITH_SPACING
 from gui_dialogs import PriceInputDialog, CustomerSelectionDialog, CustomPriceDialog
 from gui_customer_manager import CustomerListWindow
 from gui_history_window import SalesHistoryWindow
 from pos_app_ui import POSAppUI
 
-
-# --- Configure Logging ---
-# Assuming basicConfig called in main.py by the main application script.
-# If this module were run standalone, basicConfig would be needed here.
-# logger = logging.getLogger(__name__) # It's good practice for modules to get their own logger
 
 # --- Main Application Logic Class ---
 class POSAppLogic:
@@ -38,8 +33,8 @@ class POSAppLogic:
         logging.info("Initializing POS Application Logic...")
         self.root = root
         self._initialize_variables()
-        self._setup_styles()  # Style setup needs to happen before UI creation if UI uses styled widgets
-        self.ui = POSAppUI(root, self.style)  # Pass the configured style to the UI
+        self._setup_styles()
+        self.ui = POSAppUI(root, self.style)
         self._connect_ui_commands()
         self._bind_shortcuts()
         self._load_initial_data()
@@ -50,47 +45,44 @@ class POSAppLogic:
     def _initialize_variables(self):
         """Initialize instance variables for logic."""
         logging.info("Initializing database...")
-        db_operations.initialize_db()  # Ensure DB is ready
+        db_operations.initialize_db()
         logging.info("Database initialized.")
         self.products = self.load_products()
-        self.current_sale = {}  # Stores items in the current transaction
+        self.current_sale = {}
         self.total_amount = 0.0
-        self.history_window = None  # Reference to SalesHistoryWindow instance
-        self.customer_list_window = None  # Reference to CustomerListWindow instance
-        self.status_bar_job = None  # For managing status bar auto-clear
-        self.current_customer_name = "N/A"  # Default customer
-        # StringVars for UI elements are now managed within self.ui (POSAppUI instance)
+        self.history_window = None
+        self.customer_list_window = None
+        self.status_bar_job = None
+        self.current_customer_name = "N/A"
 
     def _setup_styles(self):
         """Configures ttk styles for the application."""
         self.style = ttk.Style(self.root)
         try:
-            self.style.theme_use('clam')  # A common theme that works well
+            self.style.theme_use('clam')
         except tk.TclError:
             logging.warning("'clam' theme not available, using default.")
 
-        # --- Define Theme Colors (Example: Apple Green Theme) ---
-        BG_COLOR = "#F0FFF0"  # Honeydew (overall background)
-        BUTTON_BG = "#98FB98"  # PaleGreen (standard buttons)
-        BUTTON_FG = "#006400"  # DarkGreen (text on standard buttons)
-        BUTTON_ACTIVE = "#90EE90"  # LightGreen (button when hovered/pressed)
-        FINALIZE_BG = "#3CB371"  # MediumSeaGreen (finalize sale button)
-        FINALIZE_ACTIVE = "#66CDAA"  # MediumAquaMarine (finalize active)
-        LABEL_FG = "#2F4F4F"  # DarkSlateGray (standard labels)
-        HEADER_FG = "#1E8449"  # Darker Green (for header labels)
-        TOTAL_FG = "#006400"  # DarkGreen (for the total amount display)
-        TREE_HEADING_BG = "#D0F0C0"  # Tea Green Light (Treeview headings)
-        TREE_HEADING_FG = "#1E8449"  # Darker Green (text on Treeview headings)
-        TREE_ROW_BG_ODD = "#FFFFFF"  # White (odd rows in Treeview)
-        TREE_ROW_BG_EVEN = "#F5FFFA"  # MintCream (even rows in Treeview)
-        STATUS_BG = "#98FB98"  # PaleGreen (status bar background)
-        STATUS_FG = "#006400"  # DarkGreen (status bar text)
-        LISTBOX_SELECT_BG = "#3CB371"  # MediumSeaGreen (selected item in Listbox)
-        LISTBOX_SELECT_FG = "#FFFFFF"  # White (text of selected item in Listbox)
+        BG_COLOR = "#F0FFF0"
+        BUTTON_BG = "#98FB98"
+        BUTTON_FG = "#006400"
+        BUTTON_ACTIVE = "#90EE90"
+        FINALIZE_BG = "#3CB371"
+        FINALIZE_ACTIVE = "#66CDAA"
+        LABEL_FG = "#2F4F4F"
+        HEADER_FG = "#1E8449"
+        TOTAL_FG = "#006400"
+        TREE_HEADING_BG = "#D0F0C0"
+        TREE_HEADING_FG = "#1E8449"
+        TREE_ROW_BG_ODD = "#FFFFFF"
+        TREE_ROW_BG_EVEN = "#F5FFFA"
+        STATUS_BG = "#98FB98"
+        STATUS_FG = "#006400"
+        LISTBOX_SELECT_BG = "#3CB371"
+        LISTBOX_SELECT_FG = "#FFFFFF"
 
-        # --- Configure Styles ---
         self.style.configure('TFrame', background=BG_COLOR)
-        self.style.configure('App.TFrame', background=BG_COLOR)  # Specific style for main frames
+        self.style.configure('App.TFrame', background=BG_COLOR)
         self.style.configure('TLabel', background=BG_COLOR, foreground=LABEL_FG, font=('Arial', 10))
         self.style.configure('Header.TLabel', background=BG_COLOR, foreground=HEADER_FG, font=('Arial', 12, 'bold'))
         self.style.configure('Total.TLabel', background=BG_COLOR, foreground=TOTAL_FG, font=('Arial', 14, 'bold'))
@@ -98,116 +90,97 @@ class POSAppLogic:
         self.style.configure('TButton', background=BUTTON_BG, foreground=BUTTON_FG, font=('Arial', 9), padding=5,
                              borderwidth=1, relief='raised')
         self.style.map('TButton', background=[('active', BUTTON_ACTIVE)])
-        self.style.configure('Product.TButton', font=('Arial', 10, 'bold'),
-                             padding=(5, 10))  # Larger padding for product buttons
-        self.style.configure('Action.TButton', padding=4, font=('Arial', 9))  # Smaller action buttons
+        self.style.configure('Product.TButton', font=('Arial', 10, 'bold'), padding=(5, 10))
+        self.style.configure('Action.TButton', padding=4, font=('Arial', 9))
         self.style.configure('Finalize.TButton', background=FINALIZE_BG, foreground='white', font=('Arial', 10, 'bold'),
                              padding=6)
         self.style.map('Finalize.TButton', background=[('active', FINALIZE_ACTIVE)])
-        # Custom Treeview style for alternating row colors and selection
         self.style.configure("Custom.Treeview", rowheight=25, fieldbackground=TREE_ROW_BG_ODD,
                              background=TREE_ROW_BG_ODD, foreground=LABEL_FG)
         self.style.map("Custom.Treeview", background=[('selected', LISTBOX_SELECT_BG)],
-                       foreground=[('selected', LISTBOX_SELECT_FG)])  # Use listbox selection colors for tree
+                       foreground=[('selected', LISTBOX_SELECT_FG)])
         self.style.configure("Custom.Treeview.Heading", background=TREE_HEADING_BG, foreground=TREE_HEADING_FG,
                              font=('Arial', 10, 'bold'), relief="flat")
-        self.style.map("Custom.Treeview.Heading",
-                       background=[('active', BUTTON_ACTIVE)])  # Optional: highlight heading on active
+        self.style.map("Custom.Treeview.Heading", background=[('active', BUTTON_ACTIVE)])
         self.style.configure('TEntry', fieldbackground='white', foreground='black')
         self.style.configure('TCombobox', fieldbackground='white', foreground='black')
         self.style.configure('TScrollbar', background=BUTTON_BG, troughcolor=BG_COLOR, borderwidth=0)
         self.style.map('TScrollbar', background=[('active', BUTTON_ACTIVE)])
         self.style.configure('TLabelFrame', background=BG_COLOR, borderwidth=1, relief="groove")
         self.style.configure('TLabelFrame.Label', background=BG_COLOR, foreground=HEADER_FG, font=('Arial', 11, 'bold'))
-
-        # Store listbox selection colors for UI class if it needs them directly (e.g., for tk.Listbox)
         self.style.listbox_select_bg = LISTBOX_SELECT_BG
         self.style.listbox_select_fg = LISTBOX_SELECT_FG
 
     def _connect_ui_commands(self):
         """Connect button commands from the UI instance to logic methods."""
         logging.debug("Connecting UI commands to logic...")
-        # Product Management Buttons
         self.ui.add_product_button.config(command=self.prompt_new_item)
         self.ui.edit_product_button.config(command=self.prompt_edit_item)
         self.ui.remove_product_button.config(command=self.remove_selected_product_permanently)
         self.ui.view_customers_button.config(command=self.view_customers)
-
-        # Sale Panel Buttons
         self.ui.select_customer_button.config(command=self.select_customer_for_sale)
         self.ui.finalize_button.config(command=self.finalize_sale)
         self.ui.history_button.config(command=self.view_sales_history)
         self.ui.clear_button.config(command=self.clear_sale)
         self.ui.remove_item_button.config(command=self.remove_selected_item_from_sale)
         self.ui.decrease_qty_button.config(command=self.decrease_item_quantity)
-
-        # Menu commands are setup in _setup_menu which is called by POSAppUI if menu is part of UI
-        # If menu is directly on root here, then _setup_menu needs to be called here.
-        # Based on previous structure, menu was part of POSApp (now POSAppLogic)
         self._setup_menu()
-
-        # Bind scrollable frame events (these are UI interactions, but logic needs to respond)
         self.ui.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame)
         self.ui.product_canvas.bind('<Configure>', self._configure_scrollable_frame_width)
-
         logging.debug("UI commands connected.")
 
     def _setup_menu(self):
         """Creates the main menu bar and connects commands."""
         menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)  # Attach menubar to the root window
-
+        self.root.config(menu=menubar)
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Backup Database...", command=self.backup_database)
         file_menu.add_command(label="Restore Database...", command=self.restore_database)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
-        # Add more menus (e.g., "Manage", "View") as needed
 
     def _bind_shortcuts(self):
         """Binds keyboard shortcuts to application functions."""
         logging.debug("Binding keyboard shortcuts...")
         self.root.bind('<F1>', self.focus_first_product)
-        self.root.bind('<Control-f>', lambda event=None: self.finalize_sale())  # Ctrl+F for Finalize
-        self.root.bind('<Control-h>', lambda event=None: self.view_sales_history())  # Ctrl+H for History
-        self.root.bind('<Control-c>', lambda event=None: self.select_customer_for_sale())  # Ctrl+C for Customer
-        # Number shortcuts for quick add (ensure these products exist or handle gracefully)
+        self.root.bind('<Control-f>', lambda event=None: self.finalize_sale())
+        self.root.bind('<Control-h>', lambda event=None: self.view_sales_history())
+        self.root.bind('<Control-c>', lambda event=None: self.select_customer_for_sale())
         self.root.bind('<KeyPress-1>', self._handle_refill_20_shortcut)
         self.root.bind('<KeyPress-2>', self._handle_refill_25_shortcut)
-        self.root.bind('<KeyPress-3>', self._handle_custom_price_shortcut)  # For "Custom Sale"
+        self.root.bind('<KeyPress-3>', self._handle_custom_price_shortcut)
         logging.debug("Shortcuts bound.")
 
     def _load_initial_data(self):
         """Load and display initial data after UI setup."""
         logging.info("Loading initial data...")
-        self.populate_product_buttons()  # Populates product buttons in the UI
-        self.populate_product_management_list()  # Populates the listbox for managing products
-        self.update_sale_display()  # Clears and updates the current sale treeview
-        self._update_latest_customer_label()  # Fetch and display the latest customer
-        self.show_status("Ready", duration=None)  # Set initial status bar message
+        # Defer product button population slightly to allow canvas to get its initial size
+        self.root.after(50, self.populate_product_buttons)
+        self.populate_product_management_list()
+        self.update_sale_display()
+        self._update_latest_customer_label()
+        self.show_status("Ready", duration=None)
         logging.info("Initial data loaded.")
 
     def _update_latest_customer_label(self):
         """Fetches and updates the label showing the latest used customer via the UI instance."""
         logging.debug("Updating latest used customer label.")
-        latest_name = db_operations.fetch_latest_customer_name()  # Fetch from DB
+        latest_name = db_operations.fetch_latest_customer_name()
         display_text = f"Latest Customer: {latest_name}" if latest_name else "Latest Customer: None"
-        if hasattr(self.ui, 'latest_customer_name_var'):  # Check if UI element exists
+        if hasattr(self.ui, 'latest_customer_name_var'):
             self.ui.latest_customer_name_var.set(display_text)
         logging.debug(f"Latest customer label set to: '{display_text}'")
-
-    # --- Action/Logic Methods ---
 
     def show_status(self, message, duration=3000):
         """Displays a message in the status bar via the UI instance."""
         logging.debug(f"Status bar: '{message}' (duration: {duration})")
-        if hasattr(self.ui, 'status_var'):  # Ensure UI and its var are initialized
+        if hasattr(self.ui, 'status_var'):
             self.ui.status_var.set(message)
             if self.status_bar_job:
                 self.root.after_cancel(self.status_bar_job)
                 self.status_bar_job = None
-            if duration:  # If duration is None, message stays until cleared or overwritten
+            if duration:
                 self.status_bar_job = self.root.after(duration, self.clear_status)
 
     def clear_status(self):
@@ -215,7 +188,7 @@ class POSAppLogic:
         logging.debug("Clearing status bar.")
         if hasattr(self.ui, 'status_var'):
             self.ui.status_var.set("")
-        self.status_bar_job = None  # Clear any pending job
+        self.status_bar_job = None
 
     def _handle_refill_20_shortcut(self, event=None):
         """Adds 'Refill (20)' to the sale using constant from gui_utils."""
@@ -240,7 +213,7 @@ class POSAppLogic:
     def _handle_custom_price_shortcut(self, event=None):
         """Opens the custom price dialog (associated with "Custom Sale" product)."""
         logging.info("Shortcut '3' pressed, opening custom price dialog.")
-        self.prompt_custom_item()  # This method handles the "Custom Sale" logic
+        self.prompt_custom_item()
 
     def focus_first_product(self, event=None):
         """Sets focus to the first product button in the UI."""
@@ -318,7 +291,6 @@ class POSAppLogic:
                 return
         try:
             logging.info(f"Attempting restore from '{backup_path}' to '{target_db}'. Closing secondary windows.")
-            # Attempt to close secondary windows gracefully before restore
             if self.history_window and tk.Toplevel.winfo_exists(self.history_window):
                 logging.debug("Destroying history window before restore.")
                 self.history_window.destroy()
@@ -326,15 +298,15 @@ class POSAppLogic:
                 logging.debug("Destroying customer list window before restore.")
                 self.customer_list_window.destroy()
 
-            self.root.update_idletasks()  # Process window closures
-            self.root.after(100)  # Brief pause to allow UI to settle
+            self.root.update_idletasks()
+            self.root.after(100)
 
             shutil.copy2(backup_path, target_db)
             logging.info(f"Database successfully restored from '{backup_path}'. Application will close.")
             messagebox.showinfo("Restore Successful",
                                 f"Restored from:\n{os.path.basename(backup_path)}\n\nApplication will close. Please restart.",
                                 parent=self.root)
-            self.root.destroy()  # Close the application
+            self.root.destroy()
         except Exception as e:
             logging.exception(f"Error during database restore from '{backup_path}'.")
             messagebox.showerror("Restore Failed", f"Error: {e}", parent=self.root)
@@ -343,30 +315,33 @@ class POSAppLogic:
     def _configure_scrollable_frame(self, event):
         """Callback to reset the scroll region of the product canvas based on the scrollable_frame's content."""
         if hasattr(self.ui, 'product_canvas') and self.ui.product_canvas:
+            # This ensures the scrollbar knows the full extent of the content in scrollable_frame
             self.ui.product_canvas.configure(scrollregion=self.ui.product_canvas.bbox("all"))
 
     def _configure_scrollable_frame_width(self, event):
-        """Callback to adjust the width of the inner frame in the product canvas to match the canvas width."""
-        if hasattr(self.ui, 'product_canvas') and self.ui.product_canvas.find_withtag("scrollable_frame"):
-            if event.width > 0:  # Ensure valid width
+        """Callback to adjust the width of the inner frame (scrollable_frame) in the product canvas to match the canvas width."""
+        # This is important for layouts where the inner frame should fill the canvas width (e.g., for horizontal scrolling or ensuring content uses available width)
+        if hasattr(self.ui, 'product_canvas') and self.ui.product_canvas.find_withtag(
+                "scrollable_frame"):  # Check if the window item exists
+            if event.width > 0:  # Ensure valid width from event
                 self.ui.product_canvas.itemconfigure("scrollable_frame", width=event.width)
             else:
-                logging.debug(f"Scrollable frame width configuration skipped due to zero width event.")
+                # This might happen if the canvas is temporarily 0 width during layout changes.
+                logging.debug(f"Scrollable frame width configuration skipped due to zero width event on canvas.")
 
     def load_products(self):
         """Loads products from the database via db_operations."""
         logging.info(f"Loading products from '{db_operations.DATABASE_FILENAME}'...")
-        products = db_operations.fetch_products_from_db()  # This function in db_operations should handle its own errors/logging
+        products = db_operations.fetch_products_from_db()
         if not products:
             logging.warning("No products found in database.")
         else:
             logging.info(f"Loaded {len(products)} products.")
         return products
 
-    def populate_product_buttons(self, available_width=None):
-        """Populates the product buttons in the UI's scrollable frame."""
-        logging.debug("Populating product buttons...")
-        # Ensure UI elements are ready
+    def populate_product_buttons(self):
+        """Populates the product buttons in the UI's scrollable frame, dynamically adjusting columns."""
+        logging.debug("Populating product buttons dynamically...")
         if not hasattr(self.ui, 'scrollable_frame') or not hasattr(self.ui, 'product_canvas'):
             logging.error("UI elements for product buttons not initialized. Cannot populate.")
             return
@@ -374,78 +349,106 @@ class POSAppLogic:
         scrollable_frame = self.ui.scrollable_frame
         product_canvas = self.ui.product_canvas
 
-        for widget in scrollable_frame.winfo_children(): widget.destroy()  # Clear existing buttons
-        self.ui.first_product_button = None  # Reset F1 focus target in UI
+        # Ensure canvas width is up-to-date for calculation
+        # This is crucial. update_idletasks() forces Tkinter to process pending geometry calculations.
+        product_canvas.update_idletasks()
+        canvas_width = product_canvas.winfo_width()
+        logging.debug(f"Product canvas width for dynamic columns: {canvas_width}")
 
-        # Define product order using constants from gui_utils
+        # Calculate number of columns based on canvas width and approximate button width
+        # APPROX_PRODUCT_BUTTON_WIDTH_WITH_SPACING should be defined in gui_utils.py
+        if canvas_width > 0 and gui_utils.APPROX_PRODUCT_BUTTON_WIDTH_WITH_SPACING > 0:
+            num_cols = max(1, canvas_width // gui_utils.APPROX_PRODUCT_BUTTON_WIDTH_WITH_SPACING)
+        else:
+            # Fallback if width is not available (e.g., window not fully drawn yet on initial call)
+            num_cols = 4  # Default to 4 columns
+            logging.warning(
+                f"Canvas width is {canvas_width} (or approx button width is 0), falling back to {num_cols} columns for product buttons.")
+
+        logging.info(f"Calculated number of columns for product buttons: {num_cols}")
+
+        # Clear existing buttons before repopulating
+        for widget in scrollable_frame.winfo_children():
+            widget.destroy()
+        self.ui.first_product_button = None  # Reset the reference for F1 focus
+
+        # --- Product Ordering Logic (remains the same) ---
         refill_20_name = gui_utils.PRODUCT_REFILL_20
         refill_25_name = gui_utils.PRODUCT_REFILL_25
         custom_sale_name = gui_utils.PRODUCT_CUSTOM_SALE
-        other_priority = [gui_utils.PRODUCT_CONTAINER]  # Example, can be extended
+        other_priority = [gui_utils.PRODUCT_CONTAINER]
 
         ordered_products_for_buttons = []
-        remaining_products = self.products.copy()  # Work with a copy
+        remaining_products = self.products.copy()
 
-        def add_product_if_exists(name):  # Helper to add to ordered list
+        def add_product_if_exists(name):
             if name in remaining_products:
                 ordered_products_for_buttons.append((name, remaining_products[name]))
-                del remaining_products[name]  # Remove from remaining to avoid duplication
+                del remaining_products[name]
                 return True
             logging.debug(f"Product '{name}' not found in remaining products for priority ordering.")
             return False
 
-        # Apply the specific order
         add_product_if_exists(refill_20_name)
         add_product_if_exists(refill_25_name)
 
-        custom_sale_exists = custom_sale_name in remaining_products  # Check if "Custom Sale" product exists
+        custom_sale_exists = custom_sale_name in remaining_products
         if custom_sale_exists:
-            # "Custom Sale" product might have a price of 0.00 in DB, it's a trigger
             ordered_products_for_buttons.append((custom_sale_name, remaining_products[custom_sale_name]))
             del remaining_products[custom_sale_name]
         else:
             logging.warning(f"Product '{custom_sale_name}' not found in database, its button will not be created.")
 
-        for name in other_priority:  # Add other priority items
-            if name: add_product_if_exists(name)  # Check if name is not None/empty
+        for name in other_priority:
+            if name: add_product_if_exists(name)
 
-        # Add remaining products, sorted alphabetically
         ordered_products_for_buttons.extend(sorted(remaining_products.items()))
+        # --- End of Product Ordering Logic ---
 
-        # Grid layout logic for buttons
-        max_cols = 4  # Number of columns for product buttons
-        for i in range(max_cols): scrollable_frame.columnconfigure(i, weight=1,
-                                                                   uniform="prod_btn_col")  # Ensure columns resize uniformly
+        # Configure columns in the scrollable_frame based on the dynamic num_cols
+        for i in range(num_cols):
+            # weight=1 allows columns to expand and share space
+            # minsize ensures buttons don't get too squished if many columns are calculated for a wide canvas
+            # uniform group makes columns share space equally if they have the same weight
+            scrollable_frame.columnconfigure(i, weight=1, minsize=gui_utils.MIN_BUTTON_WIDTH,
+                                             uniform="product_button_column")
 
         row_num, col_num = 0, 0
         for idx, (name, price) in enumerate(ordered_products_for_buttons):
             btn_text = f"{name}\n({gui_utils.CURRENCY_SYMBOL}{price:.2f})"
-            # "Custom Sale" button triggers a special dialog, others add item directly
             button_command = self.prompt_custom_item if name == custom_sale_name else lambda n=name: self.add_item(n)
 
             btn = ttk.Button(scrollable_frame, text=btn_text, command=button_command, style='Product.TButton')
-            btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="ew")
-            if idx == 0: self.ui.first_product_button = btn  # Set F1 focus target to the very first button
+            # sticky="nsew" makes the button fill the entire grid cell, both horizontally and vertically.
+            btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="nsew")
+            if idx == 0:
+                self.ui.first_product_button = btn  # For F1 shortcut
 
-            col_num = (col_num + 1) % max_cols
-            if col_num == 0: row_num += 1
+            col_num = (col_num + 1) % num_cols  # Move to next column, wrap around using dynamic num_cols
+            if col_num == 0:
+                row_num += 1  # Move to next row after filling all columns
 
-        scrollable_frame.update_idletasks()  # Ensure frame dimensions are updated
-        product_canvas.configure(scrollregion=product_canvas.bbox("all"))  # Update scroll region
+        # After adding all buttons, update the scrollable_frame's dimensions
+        scrollable_frame.update_idletasks()
+        # Configure the canvas's scrollregion to encompass all content in scrollable_frame
+        product_canvas.configure(scrollregion=product_canvas.bbox("all"))
 
-        # Explicitly set the width of the inner frame initially after population
-        self.root.update_idletasks()  # Ensure canvas width is calculated
-        if hasattr(self.ui, 'product_canvas') and product_canvas.find_withtag("scrollable_frame"):
-            canvas_width = product_canvas.winfo_width()
-            if canvas_width > 0: product_canvas.itemconfigure("scrollable_frame", width=canvas_width)
-        logging.debug("Product buttons populated.")
+        # Ensure the inner frame (scrollable_frame) width is correctly set within the canvas.
+        # This is important especially if the number of columns results in a scrollable_frame
+        # that is narrower than the canvas itself (though with weighted columns, it should expand).
+        self.root.update_idletasks()  # Allow Tkinter to process geometry changes
+        if product_canvas.find_withtag("scrollable_frame"):
+            current_canvas_width = product_canvas.winfo_width()
+            if current_canvas_width > 0:
+                product_canvas.itemconfigure("scrollable_frame", width=current_canvas_width)
+        logging.debug(f"Product buttons populated with {num_cols} columns.")
 
     def populate_product_management_list(self):
         """Populates the product management listbox in the UI."""
         logging.debug("Populating product management list...")
         if hasattr(self.ui, 'product_listbox') and self.ui.product_listbox:
-            self.ui.product_listbox.delete(0, tk.END)  # Clear existing items
-            for name, price in sorted(self.products.items()):  # Sort products alphabetically
+            self.ui.product_listbox.delete(0, tk.END)
+            for name, price in sorted(self.products.items()):
                 self.ui.product_listbox.insert(tk.END, f"{name} ({gui_utils.CURRENCY_SYMBOL}{price:.2f})")
         logging.debug("Product management list populated.")
 
@@ -456,14 +459,13 @@ class POSAppLogic:
             return None, None
 
         indices = self.ui.product_listbox.curselection()
-        if not indices:  # No item selected
+        if not indices:
             logging.warning("Action attempted without product selection in management list.")
             messagebox.showwarning("No Selection", "Select a product from the list first.", parent=self.root)
             return None, None
 
         selected_text = self.ui.product_listbox.get(indices[0])
         try:
-            # Parsing logic: "ProductName (₱Price)"
             parts = selected_text.split(f' ({gui_utils.CURRENCY_SYMBOL}')
             if len(parts) == 2:
                 name = parts[0].strip()
@@ -487,23 +489,22 @@ class POSAppLogic:
             return
         name = name.strip()
 
-        if name in self.products:  # Check if product already exists (case-sensitive for dict keys)
+        if name in self.products:
             logging.warning(f"Attempted to add duplicate product: '{name}'.")
             messagebox.showwarning("Product Exists", f"A product named '{name}' already exists.", parent=self.root)
             return
 
         price_dialog = PriceInputDialog(self.root, "New Product Price", f"Enter Price for {name}:")
-        price = price_dialog.result  # This dialog returns float or None
+        price = price_dialog.result
 
-        if price is not None:  # User entered a price and clicked OK
+        if price is not None:
             logging.info(f"Attempting to add new product: Name='{name}', Price={price}")
-            if db_operations.insert_product_to_db(name, price):  # db_operations handles its own error messages
-                self.products[name] = price  # Add to local cache
-                self.populate_product_buttons()  # Refresh product buttons
-                self.populate_product_management_list()  # Refresh management list
+            if db_operations.insert_product_to_db(name, price):
+                self.products[name] = price
+                self.populate_product_buttons()
+                self.populate_product_management_list()
                 logging.info(f"Product '{name}' added successfully.")
                 self.show_status(f"Product '{name}' added.", 3000)
-            # else: db_operations.insert_product_to_db shows its own error messagebox on failure
         else:
             logging.info("Price entry for new product cancelled.")
 
@@ -511,7 +512,7 @@ class POSAppLogic:
         """Prompts for updated details of a selected product."""
         logging.info("Initiating edit product process.")
         original_name, original_price = self._get_selected_product_details()
-        if original_name is None: return  # Message already shown by _get_selected_product_details
+        if original_name is None: return
 
         new_name = simpledialog.askstring("Edit Product Name", "Enter New Name:", initialvalue=original_name,
                                           parent=self.root)
@@ -524,46 +525,42 @@ class POSAppLogic:
                                         initialvalue=f"{original_price:.2f}")
         new_price = price_dialog.result
 
-        if new_price is not None:  # User entered a price and clicked OK
+        if new_price is not None:
             logging.info(f"Attempting to update product '{original_name}' to Name='{new_name}', Price={new_price}")
-            # Check if the new name conflicts with an *existing different* product
             if new_name != original_name and new_name in self.products:
                 logging.warning(f"Edit failed: New product name '{new_name}' already exists for a different product.")
                 messagebox.showerror("Name Exists", f"A product named '{new_name}' already exists.", parent=self.root)
                 return
 
             if db_operations.update_product_in_db(original_name, new_name, new_price):
-                # Update local cache
                 if original_name in self.products:
                     del self.products[original_name]
                 self.products[new_name] = new_price
 
-                self.populate_product_buttons()  # Refresh UI
+                self.populate_product_buttons()
                 self.populate_product_management_list()
                 logging.info(f"Product '{original_name}' updated successfully to '{new_name}'.")
                 self.show_status(f"Product '{original_name}' updated.", 3000)
-            # else: db_operations.update_product_in_db shows its own error messagebox
         else:
             logging.info("Price entry for product edit cancelled.")
 
     def remove_selected_product_permanently(self):
         """Permanently removes the selected product from database and UI."""
         logging.info("Initiating remove product process.")
-        product_name, _ = self._get_selected_product_details()  # We only need the name for deletion
-        if product_name is None: return  # Message shown in helper
+        product_name, _ = self._get_selected_product_details()
+        if product_name is None: return
 
         if messagebox.askyesno("Confirm Delete", f"Are you sure you want to permanently delete '{product_name}'?",
                                parent=self.root):
             logging.warning(f"Attempting permanent deletion of product '{product_name}'.")
             if db_operations.delete_product_from_db(product_name):
                 if product_name in self.products:
-                    del self.products[product_name]  # Remove from local cache
+                    del self.products[product_name]
 
-                self.populate_product_buttons()  # Refresh UI
+                self.populate_product_buttons()
                 self.populate_product_management_list()
                 logging.info(f"Product '{product_name}' deleted successfully.")
                 self.show_status(f"Product '{product_name}' deleted.", 3000)
-            # else: db_operations.delete_product_from_db shows its own error messagebox
         else:
             logging.info(f"Deletion of product '{product_name}' cancelled by user.")
             self.show_status("Product deletion cancelled.", 2000)
@@ -572,12 +569,11 @@ class POSAppLogic:
         """Adds an item to the current sale dictionary and updates UI."""
         current_price = override_price if override_price is not None else self.products.get(name)
 
-        if current_price is None:  # Should not happen if products are loaded correctly
+        if current_price is None:
             logging.error(f"Attempted to add non-existent or price-less product '{name}'.")
             messagebox.showerror("Product Error", f"Product '{name}' not found or has no price.", parent=self.root)
             return
 
-        # Use a key that combines name and price to handle items with same name but different prices (e.g. custom price)
         item_key = f"{name}__{current_price:.2f}"
 
         if item_key in self.current_sale:
@@ -594,21 +590,21 @@ class POSAppLogic:
     def prompt_custom_item(self):
         """Opens dialog for adding an item with a custom price/quantity."""
         logging.info("Opening custom price/quantity dialog.")
-        product_names_list = sorted(list(self.products.keys()))  # Get available product names
+        product_names_list = sorted(list(self.products.keys()))
 
-        if not product_names_list:  # Check if there are any products to select from
+        if not product_names_list:
             logging.warning("Cannot open custom price dialog: No products defined in the system.")
             messagebox.showwarning("No Products", "No products are defined. Please add products first.",
                                    parent=self.root)
             return
 
-        dialog = CustomPriceDialog(self.root, product_names_list)  # Pass product names for combobox
-        result = dialog.result  # This dialog returns (name, price, qty) or None
+        dialog = CustomPriceDialog(self.root, product_names_list)
+        result = dialog.result
 
         if result:
             name, price, qty = result
             logging.info(f"Custom item details received: Name='{name}', Price={price}, Quantity={qty}.")
-            self.add_item(name, override_price=price, quantity_to_add=qty)  # Add to sale
+            self.add_item(name, override_price=price, quantity_to_add=qty)
         else:
             logging.info("Custom price/quantity dialog cancelled.")
 
@@ -616,14 +612,14 @@ class POSAppLogic:
         """Decreases quantity of selected item in the sale UI, or removes if quantity becomes zero."""
         if not hasattr(self.ui, 'sale_tree') or not self.ui.sale_tree: return
 
-        selected_id = self.ui.sale_tree.focus()  # Get the IID of the focused item
-        if not selected_id:  # No item selected
+        selected_id = self.ui.sale_tree.focus()
+        if not selected_id:
             logging.warning("Attempted to decrease quantity with no item selected in sale tree.")
             messagebox.showwarning("No Selection", "Please select an item from the sale to decrease its quantity.",
                                    parent=self.root)
             return
 
-        if selected_id in self.current_sale:  # selected_id is the item_key
+        if selected_id in self.current_sale:
             item_name = self.current_sale[selected_id]['name']
             current_quantity = self.current_sale[selected_id]['quantity']
 
@@ -632,12 +628,11 @@ class POSAppLogic:
                 logging.info(
                     f"Decreased quantity for '{item_name}'. New quantity: {self.current_sale[selected_id]['quantity']}.")
                 self.show_status(f"Decreased {item_name} quantity.", 2000)
-            else:  # Quantity is 1, so decreasing it means removing the item
+            else:
                 del self.current_sale[selected_id]
                 logging.info(f"Removed '{item_name}' from sale (quantity was 1 and was decreased).")
                 self.show_status(f"Removed {item_name}.", 2000)
 
-            # Update display, try to preserve selection if item still exists
             self.update_sale_display(preserve_selection=selected_id if selected_id in self.current_sale else None)
         else:
             logging.error(
@@ -647,18 +642,18 @@ class POSAppLogic:
         """Removes selected item entirely from the current sale UI."""
         if not hasattr(self.ui, 'sale_tree') or not self.ui.sale_tree: return
 
-        selected_id = self.ui.sale_tree.focus()  # Get IID of focused item
+        selected_id = self.ui.sale_tree.focus()
         if not selected_id:
             logging.warning("Attempted to remove item with no item selected in sale tree.")
             messagebox.showwarning("No Selection", "Please select an item from the sale to remove.", parent=self.root)
             return
 
-        if selected_id in self.current_sale:  # selected_id is the item_key
+        if selected_id in self.current_sale:
             item_name = self.current_sale[selected_id]['name']
             if messagebox.askyesno("Confirm Remove", f"Remove '{item_name}' from the current sale?", parent=self.root):
                 logging.info(f"Removing item '{item_name}' (key: {selected_id}) from sale upon user confirmation.")
                 del self.current_sale[selected_id]
-                self.update_sale_display()  # Refresh the sale display
+                self.update_sale_display()
                 self.show_status(f"Removed {item_name}.", 3000)
             else:
                 logging.info(f"Removal of item '{item_name}' cancelled by user.")
@@ -677,27 +672,23 @@ class POSAppLogic:
         sale_tree = self.ui.sale_tree
         total_label = self.ui.total_label
 
-        # Configure tags for alternating row colors (safe to call multiple times)
         try:
-            sale_tree.tag_configure('oddrow', background=self.style.lookup("Custom.Treeview",
-                                                                           "background"))  # Use base background for odd
-            sale_tree.tag_configure('evenrow', background="#F5FFFA")  # MintCream for even
+            sale_tree.tag_configure('oddrow', background=self.style.lookup("Custom.Treeview", "background"))
+            sale_tree.tag_configure('evenrow', background="#F5FFFA")
         except tk.TclError:
             logging.warning("Could not configure Treeview tags, style might not be fully ready.")
             pass
 
-        for i in sale_tree.get_children(): sale_tree.delete(i)  # Clear existing items
+        for i in sale_tree.get_children(): sale_tree.delete(i)
 
         self.total_amount = 0.0
-        new_selection_id = None  # To reselect item if preserve_selection is used
+        new_selection_id = None
 
-        # Sort items by name for consistent display
         sorted_sale_items = sorted(self.current_sale.items(), key=lambda item: item[1]['name'])
 
         for i, (key, details) in enumerate(sorted_sale_items):
             tag = 'evenrow' if i % 2 == 0 else 'oddrow'
             subtotal = details['price'] * details['quantity']
-            # Insert item into treeview, using 'key' (which is "name__price") as IID
             item_id_in_tree = sale_tree.insert("", tk.END, iid=key, values=(
                 details['name'],
                 details['quantity'],
@@ -705,18 +696,18 @@ class POSAppLogic:
                 f"{gui_utils.CURRENCY_SYMBOL}{subtotal:.2f}"
             ), tags=(tag,))
 
-            if preserve_selection == key:  # If this item was meant to be reselected
-                new_selection_id = item_id_in_tree  # Store its IID in the tree
+            if preserve_selection == key:
+                new_selection_id = item_id_in_tree
 
             self.total_amount += subtotal
 
         total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{self.total_amount:.2f}")
 
-        if new_selection_id:  # If an item needs to be reselected
+        if new_selection_id:
             logging.debug(f"Reselecting item in sale tree: {new_selection_id}")
             sale_tree.focus(new_selection_id)
             sale_tree.selection_set(new_selection_id)
-        else:  # Otherwise, clear focus and selection
+        else:
             sale_tree.focus('');
             sale_tree.selection_set('')
 
@@ -724,18 +715,18 @@ class POSAppLogic:
 
     def clear_sale(self):
         """Clears the current sale data and resets customer in UI."""
-        if not self.current_sale:  # If sale is already empty
+        if not self.current_sale:
             logging.info("Clear sale requested, but sale is already empty.")
             self.show_status("Sale is already empty.", 2000)
             return
 
         if messagebox.askyesno("Confirm Clear", "Are you sure you want to clear the current sale?", parent=self.root):
             logging.info("Clearing current sale upon user confirmation.")
-            self.current_sale = {}  # Reset sale data
-            self.current_customer_name = "N/A"  # Reset customer
+            self.current_sale = {}
+            self.current_customer_name = "N/A"
             if hasattr(self.ui, 'customer_display_var'):
                 self.ui.customer_display_var.set(f"Customer: {self.current_customer_name}")
-            self.update_sale_display()  # Refresh UI
+            self.update_sale_display()
             self.show_status("Sale cleared.", 3000)
             logging.info("Sale cleared successfully.")
         else:
@@ -745,16 +736,16 @@ class POSAppLogic:
     def select_customer_for_sale(self):
         """Opens dialog to select or enter a customer for the current sale."""
         logging.info("Opening customer selection dialog for current sale.")
-        dialog = CustomerSelectionDialog(self.root)  # Parent is the main root window
-        name = dialog.result  # Dialog handles its own logic, returns name or None
+        dialog = CustomerSelectionDialog(self.root)
+        name = dialog.result
 
-        if name is not None:  # If a name was selected/entered and OK was pressed
+        if name is not None:
             self.current_customer_name = name
             if hasattr(self.ui, 'customer_display_var'):
                 self.ui.customer_display_var.set(f"Customer: {self.current_customer_name}")
             logging.info(f"Customer selected for sale: '{self.current_customer_name}'.")
             self.show_status(f"Customer set to: {self.current_customer_name}", 3000)
-        else:  # Dialog was cancelled
+        else:
             logging.info("Customer selection cancelled.")
             self.show_status("Customer selection cancelled.", 2000)
 
@@ -769,11 +760,10 @@ class POSAppLogic:
         receipt += "{:<18} {:>3} {:>7} {:>8}\n".format("Item", "Qty", "Price", "Subtotal")
         receipt += "--------------------------------------\n"
 
-        # Iterate through sorted items for consistent receipt order
         for details in sorted(self.current_sale.values(), key=lambda item: item['name']):
             subtotal = details['quantity'] * details['price']
             receipt += "{:<18} {:>3d} {:>7} {:>8}\n".format(
-                details['name'][:18],  # Truncate item name if too long
+                details['name'][:18],
                 details['quantity'],
                 f"{gui_utils.CURRENCY_SYMBOL}{details['price']:.2f}",
                 f"{gui_utils.CURRENCY_SYMBOL}{subtotal:.2f}"
@@ -796,60 +786,51 @@ class POSAppLogic:
             messagebox.showwarning("No Customer", "Please select a customer for the sale.", parent=self.root)
             return
 
-        ts = datetime.datetime.now()  # Timestamp for the sale
+        ts = datetime.datetime.now()
 
-        # --- CORRECTED: Prepare items_for_db as a LIST of DICTIONARIES ---
         items_for_db = []
-        for item_key in self.current_sale:  # Iterate through the keys of current_sale
+        for item_key in self.current_sale:
             details = self.current_sale[item_key]
             items_for_db.append({
                 'name': details['name'],
                 'price': details['price'],
                 'quantity': details['quantity']
             })
-        # --- End of correction ---
 
         logging.info(
             f"Finalizing sale for customer '{self.current_customer_name}' with {len(items_for_db)} line item(s).")
 
-        # Save the main sale record
         sale_id = db_operations.save_sale_record(ts, self.total_amount, self.current_customer_name)
 
-        if sale_id:  # If sale header was saved successfully
-            # Save the individual sale items
-            if db_operations.save_sale_items_records(sale_id, items_for_db):  # Pass the list
+        if sale_id:
+            if db_operations.save_sale_items_records(sale_id, items_for_db):
                 receipt = self.generate_receipt_text(sale_id, ts, self.current_customer_name)
                 logging.info(f"Sale {sale_id} and its items successfully saved to database.")
                 logging.debug(f"--- Receipt for Sale ID: {sale_id} ---\n{receipt}\n---------------")
 
                 messagebox.showinfo(f"Sale Finalized - ID: {sale_id}", receipt, parent=self.root)
 
-                # Clear sale state after successful save and receipt display
-                previous_customer = self.current_customer_name  # Store before resetting
+                previous_customer = self.current_customer_name
                 self.current_sale = {}
-                self.current_customer_name = "N/A"  # Reset to default customer
+                self.current_customer_name = "N/A"
                 if hasattr(self.ui, 'customer_display_var'):
                     self.ui.customer_display_var.set(f"Customer: {self.current_customer_name}")
 
-                self._update_latest_customer_label()  # Update the "Latest Customer" display
-                self.update_sale_display()  # Clear the sale UI
+                self._update_latest_customer_label()
+                self.update_sale_display()
                 self.show_status(f"Sale {sale_id} recorded successfully.", 3000)
             else:
-                # This case means save_sale_items_records failed
                 logging.error(
                     f"Failed to save sale ITEMS for Sale ID {sale_id} (Customer: '{self.current_customer_name}'). The main sale record might have been saved. Consider manual DB check or rollback logic.")
-                # db_operations.save_sale_items_records should show its own error via messagebox
                 self.show_status("Error saving sale items. Sale may be partially saved.", 5000)
         else:
-            # This case means save_sale_record (header) failed
             logging.error(f"Failed to save main sale record for customer '{self.current_customer_name}'.")
-            # db_operations.save_sale_record should show its own error via messagebox
             self.show_status("Error saving sale header.", 5000)
 
     def view_sales_history(self):
         """Opens the sales history window, ensuring tkcalendar is available."""
         logging.info("Opening sales history window.")
-        if DateEntry is None:  # Check if tkcalendar was imported successfully
+        if DateEntry is None:
             logging.error("Cannot open sales history: tkcalendar library not found.")
             messagebox.showerror("Missing Library",
                                  "The 'tkcalendar' library is required for this feature but was not found.\nPlease install it (e.g., pip install tkcalendar) and restart the application.",
@@ -858,23 +839,23 @@ class POSAppLogic:
 
         if self.history_window is None or not tk.Toplevel.winfo_exists(self.history_window):
             logging.debug("Creating new SalesHistoryWindow instance.")
-            self.history_window = SalesHistoryWindow(self.root)  # Pass root as parent
-            self.history_window.grab_set()  # Make it modal
-        else:  # Window already exists
+            self.history_window = SalesHistoryWindow(self.root)
+            self.history_window.grab_set()
+        else:
             logging.debug("Bringing existing SalesHistoryWindow to front.")
-            self.history_window.deiconify()  # Show if minimized
-            self.history_window.lift()  # Bring to top
-            self.history_window.focus_set()  # Give focus
-            self.history_window.grab_set()  # Re-grab if necessary
+            self.history_window.deiconify()
+            self.history_window.lift()
+            self.history_window.focus_set()
+            self.history_window.grab_set()
 
     def view_customers(self):
         """Opens the customer management window."""
         logging.info("Opening customer management window.")
         if self.customer_list_window is None or not tk.Toplevel.winfo_exists(self.customer_list_window):
             logging.debug("Creating new CustomerListWindow instance.")
-            self.customer_list_window = CustomerListWindow(self.root)  # Pass root as parent
-            self.customer_list_window.grab_set()  # Make it modal
-        else:  # Window already exists
+            self.customer_list_window = CustomerListWindow(self.root)
+            self.customer_list_window.grab_set()
+        else:
             logging.debug("Bringing existing CustomerListWindow to front.")
             self.customer_list_window.deiconify()
             self.customer_list_window.lift()
