@@ -16,7 +16,7 @@ except ImportError:
     DateEntry = None
 
 import db_operations
-import gui_utils  # For color constants
+import gui_utils
 from gui_dialogs import PriceInputDialog, CustomerSelectionDialog, CustomPriceDialog
 from gui_customer_manager import CustomerListWindow
 from gui_history_window import SalesHistoryWindow
@@ -30,10 +30,12 @@ class POSAppLogic:
         self._initialize_variables()
         self._setup_styles()
         self.ui = POSAppUI(root, self.style)
-        self._connect_ui_commands()
+        self._connect_ui_commands()  # Modified to include keyboard bindings
         self._bind_shortcuts()
         self._load_initial_data()
         logging.info("POS Application Logic Initialized Successfully.")
+
+    # --- Initialization and Setup Methods ---
 
     def _initialize_variables(self):
         logging.info("Initializing database...")
@@ -87,16 +89,14 @@ class POSAppLogic:
                              borderwidth=1, relief='raised')
         self.style.map('TButton', background=[('active', BUTTON_ACTIVE)])
 
-        # Standard Product Button Style
         self.style.configure('Product.TButton', font=('Arial', 10, 'bold'), padding=(5, 10))
 
-        # --- NEW: Custom Sale Button Style ---
         self.style.configure('CustomSale.Product.TButton',
-                             font=('Arial', 10, 'bold', 'italic'),  # Added italic for more distinction
+                             font=('Arial', 10, 'bold', 'italic'),
                              padding=(5, 10),
                              background=gui_utils.CUSTOM_SALE_BUTTON_BG,
                              foreground=gui_utils.CUSTOM_SALE_BUTTON_FG,
-                             borderwidth=2,  # Slightly thicker border
+                             borderwidth=2,
                              relief='raised')
         self.style.map('CustomSale.Product.TButton',
                        background=[('active', gui_utils.CUSTOM_SALE_BUTTON_ACTIVE_BG)],
@@ -124,7 +124,10 @@ class POSAppLogic:
         self.style.configure('TLabelFrame.Label', background=BG_COLOR, foreground=HEADER_FG, font=('Arial', 11, 'bold'))
 
     def _connect_ui_commands(self):
-        logging.debug("Connecting UI commands to logic...")
+        """Connect button commands AND KEYBOARD BINDINGS from the UI instance to logic methods."""
+        logging.debug("Connecting UI commands and key bindings to logic...")
+
+        # --- Standard Button Commands ---
         self.ui.add_product_button.config(command=self.prompt_new_item)
         self.ui.edit_product_button.config(command=self.prompt_edit_item)
         self.ui.remove_product_button.config(command=self.remove_selected_product_permanently)
@@ -138,7 +141,31 @@ class POSAppLogic:
         self._setup_menu()
         self.ui.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame)
         self.ui.product_canvas.bind('<Configure>', self._configure_scrollable_frame_width)
-        logging.debug("UI commands connected.")
+
+        # --- NEW: Keyboard Navigation Bindings ---
+        if hasattr(self.ui, 'product_listbox') and self.ui.product_listbox:
+            self.ui.product_listbox.bind("<Up>", self._handle_product_listbox_nav)
+            self.ui.product_listbox.bind("<Down>", self._handle_product_listbox_nav)
+            # Bind Return (Enter) and Space to trigger editing the selected product
+            self.ui.product_listbox.bind("<Return>", self._handle_product_listbox_activate)
+            self.ui.product_listbox.bind("<space>", self._handle_product_listbox_activate)
+            # Optional: Bind Double-Button-1 (double click) as well
+            self.ui.product_listbox.bind("<Double-Button-1>", self._handle_product_listbox_activate)
+
+        if hasattr(self.ui, 'sale_tree') and self.ui.sale_tree:
+            # Treeview handles basic Up/Down selection internally, but we can add actions
+            # Bind Delete key to remove selected item
+            self.ui.sale_tree.bind("<Delete>", self._handle_sale_tree_delete)
+            # Bind Minus key to decrease quantity
+            self.ui.sale_tree.bind("<KeyPress-minus>", self._handle_sale_tree_decrease)
+            self.ui.sale_tree.bind("-", self._handle_sale_tree_decrease)  # Also bind numpad minus if needed
+
+        # Ensure buttons respond to Enter/Space when focused (ttk buttons usually do, but explicit doesn't hurt)
+        # We can bind these globally or individually. Let's try globally for Return.
+        # Space is typically handled automatically by ttk.Button.
+        # self.root.bind_class("TButton", "<Return>", lambda e: e.widget.invoke()) # Example global binding (use with caution)
+
+        logging.debug("UI commands and key bindings connected.")
 
     def _setup_menu(self):
         menubar = tk.Menu(self.root)
@@ -205,6 +232,58 @@ class POSAppLogic:
         if revert_style and hasattr(self.ui, 'status_bar'):
             self.ui.status_bar.config(style="Status.TLabel")
         self.status_bar_job = None
+
+        # --- NEW Keyboard Navigation Handlers ---
+
+    def _handle_product_listbox_nav(self, event):
+        """Handles Up/Down arrow key navigation in the product listbox."""
+        listbox = event.widget
+        current_selection_indices = listbox.curselection()
+
+        if not current_selection_indices:  # If nothing is selected, select the first item
+            if listbox.size() > 0:
+                listbox.selection_set(0)
+                listbox.activate(0)
+                listbox.see(0)  # Ensure it's visible
+        else:
+            current_index = current_selection_indices[0]
+            new_index = current_index
+
+            if event.keysym == "Up":
+                new_index = max(0, current_index - 1)
+            elif event.keysym == "Down":
+                new_index = min(listbox.size() - 1, current_index + 1)
+
+            if new_index != current_index:
+                listbox.selection_clear(0, tk.END)
+                listbox.selection_set(new_index)
+                listbox.activate(new_index)
+                listbox.see(new_index)  # Scroll to make the new selection visible
+
+        return "break"  # Prevents default Tkinter handling if needed
+
+    def _handle_product_listbox_activate(self, event):
+        """Handles Return/Space key press on the product listbox (triggers edit)."""
+        logging.debug(f"Product listbox activate event triggered by {event.keysym}")
+        # Check if an item is actually selected
+        if self.ui.product_listbox.curselection():
+            self.prompt_edit_item()  # Trigger the edit action for the selected item
+        return "break"  # Prevent default handling
+
+    # Treeview navigation is mostly handled internally, but we add action bindings
+    def _handle_sale_tree_delete(self, event):
+        """Handles Delete key press on the sale treeview."""
+        logging.debug("Delete key pressed on sale tree.")
+        self.remove_selected_item_from_sale()
+        return "break"  # Prevent default handling
+
+    def _handle_sale_tree_decrease(self, event):
+        """Handles Minus key press on the sale treeview."""
+        logging.debug("Minus key pressed on sale tree.")
+        self.decrease_item_quantity()
+        return "break"  # Prevent default handling
+
+    # --- Existing Action/Logic Methods (Modified calls to show_status) ---
 
     def _handle_refill_20_shortcut(self, event=None):
         product_name = gui_utils.PRODUCT_REFILL_20
@@ -400,17 +479,11 @@ class POSAppLogic:
         row_num, col_num = 0, 0
         for idx, (name, price) in enumerate(ordered_products_for_buttons):
             btn_text = f"{name}\n({gui_utils.CURRENCY_SYMBOL}{price:.2f})"
-
-            # --- MODIFIED: Apply special style for Custom Sale button ---
             current_button_style = 'Product.TButton'
             if name == custom_sale_name:
                 current_button_style = 'CustomSale.Product.TButton'
-
             button_command = self.prompt_custom_item if name == custom_sale_name else lambda n=name: self.add_item(n)
-
             btn = ttk.Button(scrollable_frame, text=btn_text, command=button_command, style=current_button_style)
-            # --- End of modification ---
-
             btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="nsew")
             if idx == 0:
                 self.ui.first_product_button = btn
@@ -442,7 +515,8 @@ class POSAppLogic:
         indices = self.ui.product_listbox.curselection()
         if not indices:
             logging.warning("Action attempted without product selection.")
-            messagebox.showwarning("No Selection", "Select a product from the list first.", parent=self.root)
+            # Don't show messagebox here, let the calling function decide
+            # messagebox.showwarning("No Selection", "Select a product from the list first.", parent=self.root)
             return None, None
         selected_text = self.ui.product_listbox.get(indices[0])
         try:
@@ -486,18 +560,25 @@ class POSAppLogic:
             self.show_status("Add product cancelled (no price).", status_type="info")
 
     def prompt_edit_item(self):
+        """Handles the logic for editing a selected product."""
         logging.info("Initiating edit product.")
         original_name, original_price = self._get_selected_product_details()
-        if original_name is None: return
+        if original_name is None:
+            # If nothing selected, inform user via status bar
+            self.show_status("Select a product from the list to edit.", status_type="info")
+            return
+
         new_name = simpledialog.askstring("Edit Name", "New name:", initialvalue=original_name, parent=self.root)
         if not new_name or not new_name.strip():
             logging.info("Edit cancelled.")
             self.show_status("Edit product cancelled.", status_type="info")
             return
         new_name = new_name.strip()
+
         price_dialog = PriceInputDialog(self.root, "Edit Price", f"New price for {new_name}:",
                                         initialvalue=f"{original_price:.2f}")
         new_price = price_dialog.result
+
         if new_price is not None:
             logging.info(f"Attempting update '{original_name}' to Name='{new_name}', Price={new_price}")
             if new_name != original_name and new_name in self.products:
@@ -505,6 +586,7 @@ class POSAppLogic:
                 messagebox.showerror("Exists", f"'{new_name}' already exists.", parent=self.root)
                 self.show_status(f"'{new_name}' already exists.", status_type="error")
                 return
+
             if db_operations.update_product_in_db(original_name, new_name, new_price):
                 if original_name in self.products: del self.products[original_name]
                 self.products[new_name] = new_price
@@ -518,7 +600,9 @@ class POSAppLogic:
     def remove_selected_product_permanently(self):
         logging.info("Initiating remove product.")
         product_name, _ = self._get_selected_product_details()
-        if product_name is None: return
+        if product_name is None:
+            self.show_status("Select a product from the list to remove.", status_type="info")
+            return
         if messagebox.askyesno("Confirm Delete", f"Delete '{product_name}' permanently?", parent=self.root):
             logging.warning(f"Attempting deletion of '{product_name}'.")
             if db_operations.delete_product_from_db(product_name):
@@ -572,7 +656,7 @@ class POSAppLogic:
         selected_id = self.ui.sale_tree.focus()
         if not selected_id:
             logging.warning("Decrease qty: No item selected.")
-            messagebox.showwarning("No Selection", "Select item to decrease.", parent=self.root)
+            # Don't use messagebox, just status bar
             self.show_status("Select item to decrease quantity.", status_type="info")
             return
         if selected_id in self.current_sale:
@@ -595,7 +679,7 @@ class POSAppLogic:
         selected_id = self.ui.sale_tree.focus()
         if not selected_id:
             logging.warning("Remove item: No item selected.")
-            messagebox.showwarning("No Selection", "Select item to remove.", parent=self.root)
+            # Don't use messagebox, just status bar
             self.show_status("Select item to remove.", status_type="info")
             return
         if selected_id in self.current_sale:
