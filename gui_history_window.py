@@ -40,9 +40,9 @@ class SalesHistoryWindow(tk.Toplevel):
         self.todays_items_tree = None
 
         win_width = 850
-        win_height = 700
+        win_height = 680  # Reduced height slightly as Avg Sale label is removed
         self.geometry(f"{win_width}x{win_height}")
-        self.minsize(700, 500)
+        self.minsize(700, 480)  # Adjusted min height
         gui_utils.center_window(self, win_width, win_height)
 
         self.resizable(True, True)
@@ -88,13 +88,9 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.configure(yscrollcommand=sales_list_scrollbar.set)
         sales_list_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        # --- Bindings for sales_tree ---
-        self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)  # Existing
+        self.sales_tree.bind("<<TreeviewSelect>>", self.on_sale_select)
         self.sales_tree.bind("<Up>", self._handle_sales_tree_nav)
         self.sales_tree.bind("<Down>", self._handle_sales_tree_nav)
-        # Return/Space don't need explicit action binding as selection triggers receipt update
-        # self.sales_tree.bind("<Return>", self._handle_sales_tree_activate) # Optional: could focus receipt text
-        # self.sales_tree.bind("<space>", self._handle_sales_tree_activate) # Optional
         self.sales_tree.bind("<Delete>", self._handle_sales_tree_delete)
 
         # Receipt Details Text Area (Row 1, Column 1)
@@ -186,30 +182,34 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.configure(yscrollcommand=summary_scrollbar.set)
         summary_scrollbar.grid(row=0, column=1, sticky='ns')
 
-        # --- Bindings for custom_summary_tree ---
-        self.custom_summary_tree.bind("<Double-Button-1>", self.on_summary_item_select)  # Existing
+        self.custom_summary_tree.bind("<Double-Button-1>", self.on_summary_item_select)
         self.custom_summary_tree.bind("<Up>", self._handle_summary_tree_nav)
         self.custom_summary_tree.bind("<Down>", self._handle_summary_tree_nav)
         self.custom_summary_tree.bind("<Return>", self._handle_summary_tree_activate)
         self.custom_summary_tree.bind("<space>", self._handle_summary_tree_activate)
 
         # Custom Range Grand Total Label and Export Button (Row 6)
+        # --- MODIFIED: Removed Avg Sale Label ---
         custom_total_frame = ttk.Frame(self)
         custom_total_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5))
-        custom_total_frame.columnconfigure(0, weight=1)
-        custom_total_frame.columnconfigure(1, weight=0)
+        custom_total_frame.columnconfigure(0, weight=1)  # Allow labels to take space
+        custom_total_frame.columnconfigure(1, weight=0)  # Keep button/total to the right
+
+        # Items Label (now on row 0)
         self.custom_range_items_label = ttk.Label(custom_total_frame, text="Items: 0", font=("Arial", 10))
-        self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5)
-        self.custom_range_avg_label = ttk.Label(custom_total_frame, text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00",
-                                                font=("Arial", 10))
-        self.custom_range_avg_label.grid(row=1, column=0, sticky="w", padx=5)
+        self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5, pady=(0, 2))  # Added bottom padding
+
+        # Total Label (now on row 0, column 1)
         self.custom_range_grand_total_label = ttk.Label(custom_total_frame,
                                                         text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00",
                                                         font=("Arial", 10, "bold"))
         self.custom_range_grand_total_label.grid(row=0, column=1, sticky="e", padx=(10, 0))
+
+        # Export Button (now on row 1, column 1)
         export_summary_button = ttk.Button(custom_total_frame, text="Export Summary",
                                            command=self.export_summary_to_csv)
         export_summary_button.grid(row=1, column=1, sticky="e", padx=(10, 0), pady=(2, 0))
+        # --- End of Modification ---
 
         # Action Buttons (Row 7)
         action_button_frame = ttk.Frame(self)
@@ -259,7 +259,6 @@ class SalesHistoryWindow(tk.Toplevel):
         new_focus = tree.focus()
         if new_focus:
             tree.see(new_focus)
-            # Manually trigger the action associated with selection change
             self.on_sale_select()
         return "break"
 
@@ -268,7 +267,7 @@ class SalesHistoryWindow(tk.Toplevel):
         logging.debug("Delete key pressed on sales tree.")
         focused_item = self.sales_tree.focus()
         if focused_item:
-            self.delete_selected_sale()  # Call existing delete method
+            self.delete_selected_sale()
         return "break"
 
     def _handle_summary_tree_nav(self, event):
@@ -296,8 +295,6 @@ class SalesHistoryWindow(tk.Toplevel):
         new_focus = tree.focus()
         if new_focus:
             tree.see(new_focus)
-            # Optional: Could trigger on_summary_item_select here if desired upon navigation
-            # self.on_summary_item_select()
         return "break"
 
     def _handle_summary_tree_activate(self, event):
@@ -305,20 +302,17 @@ class SalesHistoryWindow(tk.Toplevel):
         logging.debug(f"Summary tree activate event triggered by {event.keysym}")
         focused_item = self.custom_summary_tree.focus()
         if focused_item:
-            self.on_summary_item_select()  # Trigger the detail view
+            self.on_summary_item_select()
         return "break"
 
-    # --- Existing Methods (Ensure they are all included) ---
+    # --- Existing Methods ---
 
     def populate_sales_list(self):
         """Fetches sales and populates the sales Treeview."""
-        # Store current focus/selection
         current_focus_id = self.sales_tree.focus()
-
         for i in self.sales_tree.get_children():
             self.sales_tree.delete(i)
         sales_data = db_operations.fetch_sales_list_from_db()
-
         new_focus_candidate = None
         if sales_data:
             receipt_counter = 0
@@ -331,27 +325,24 @@ class SalesHistoryWindow(tk.Toplevel):
                 except (TypeError, ValueError):
                     display_ts = timestamp_str
                 total_display = f"{gui_utils.CURRENCY_SYMBOL}{total_amount:.2f}"
-                # Ensure iid is string
                 current_iid = str(sale_id)
                 self.sales_tree.insert("", 0,
                                        values=(sale_id, receipt_counter, display_ts, customer_name_db, total_display),
                                        iid=current_iid)
                 if current_iid == current_focus_id:
                     new_focus_candidate = current_iid
-
-        # Restore focus/selection
         if new_focus_candidate:
             self.sales_tree.focus(new_focus_candidate)
             self.sales_tree.selection_set(new_focus_candidate)
             self.sales_tree.see(new_focus_candidate)
-        elif sales_data:  # Select first item if list is not empty and no previous focus
+        elif sales_data:
             first_item_id = str(sales_data[0][0])
             self.sales_tree.focus(first_item_id)
             self.sales_tree.selection_set(first_item_id)
             self.sales_tree.see(first_item_id)
-            self.on_sale_select()  # Trigger update for first item
+            self.on_sale_select()
         else:
-            self.update_receipt_display("")  # Clear receipt if list is empty
+            self.update_receipt_display("")
 
     def update_todays_summary(self):
         """Calculates and displays today's sales total."""
@@ -379,9 +370,7 @@ class SalesHistoryWindow(tk.Toplevel):
 
     def update_custom_summary(self):
         """Calculates and displays detailed product summary for the selected date range."""
-        # Store current focus/selection
         current_focus_id = self.custom_summary_tree.focus()
-
         try:
             if DateEntry:
                 start_date = self.start_date_entry.get_date()
@@ -390,22 +379,20 @@ class SalesHistoryWindow(tk.Toplevel):
                 start_date_str = self.start_date_str_var.get()
                 end_date_str = self.end_date_str_var.get()
                 if not start_date_str or not end_date_str:
-                    # Clear tree if dates are invalid/missing
                     for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
                     self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
                     self.custom_range_items_label.config(text="Items: 0")
-                    self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00")
+                    # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
                     messagebox.showwarning("Missing Date", "Please enter both start and end dates.", parent=self)
                     return
                 start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').date()
                 end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
             if start_date > end_date:
-                # Clear tree if dates are invalid
                 for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
                 self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
                 self.custom_range_items_label.config(text="Items: 0")
-                self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00")
+                # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
                 messagebox.showwarning("Invalid Range", "Start date cannot be after end date.", parent=self)
                 return
 
@@ -422,7 +409,6 @@ class SalesHistoryWindow(tk.Toplevel):
                 for i, item_summary in enumerate(summary_data):
                     name, total_qty, total_revenue = item_summary
                     revenue_display = f"{gui_utils.CURRENCY_SYMBOL}{total_revenue:.2f}"
-                    # Use product name as IID (assuming names are unique enough for this context)
                     current_iid = name
                     self.custom_summary_tree.insert("", tk.END, iid=current_iid,
                                                     values=(name, total_qty, revenue_display))
@@ -432,39 +418,37 @@ class SalesHistoryWindow(tk.Toplevel):
                 self.custom_summary_tree.insert("", tk.END, iid="placeholder",
                                                 values=("No sales in this period", "", ""))
 
-            # Restore focus/selection
             if new_focus_candidate:
                 self.custom_summary_tree.focus(new_focus_candidate)
                 self.custom_summary_tree.selection_set(new_focus_candidate)
                 self.custom_summary_tree.see(new_focus_candidate)
-            elif summary_data:  # Select first item if list is not empty and no previous focus
-                first_item_id = summary_data[0][0]  # Use product name as IID
+            elif summary_data:
+                first_item_id = summary_data[0][0]
                 self.custom_summary_tree.focus(first_item_id)
                 self.custom_summary_tree.selection_set(first_item_id)
                 self.custom_summary_tree.see(first_item_id)
 
+            # Fetch stats but don't calculate or display average
             custom_revenue, custom_items, custom_sales_count = db_operations.fetch_sales_stats(start_date_dt_str,
                                                                                                end_date_dt_str)
-            custom_avg = custom_revenue / custom_sales_count if custom_sales_count > 0 else 0.0
+            # custom_avg = custom_revenue / custom_sales_count if custom_sales_count > 0 else 0.0 # Removed
 
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{custom_revenue:.2f}")
             self.custom_range_items_label.config(text=f"Items: {custom_items}")
-            self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{custom_avg:.2f}")
+            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{custom_avg:.2f}") # Removed
 
         except ValueError as ve:
-            # Clear tree on error
             for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
             self.custom_range_items_label.config(text="Items: 0")
-            self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00")
+            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
             messagebox.showerror("Invalid Date Format", f"Please enter dates in YYYY-MM-DD format.\nError: {ve}",
                                  parent=self)
         except Exception as e:
-            # Clear tree on error
             for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
             self.custom_range_items_label.config(text="Items: 0")
-            self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00")
+            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
             messagebox.showerror("Error", f"Could not calculate custom summary: {e}", parent=self)
 
     def on_sale_select(self, event=None):
@@ -605,8 +589,7 @@ class SalesHistoryWindow(tk.Toplevel):
 
     def on_summary_item_select(self, event=None):
         """Displays details of the selected item in the custom summary treeview."""
-        # This method is now also called by keyboard activation handlers
-        selected_item_id = self.custom_summary_tree.focus()  # Use focus
+        selected_item_id = self.custom_summary_tree.focus()
         if not selected_item_id:
             return
         item_values = self.custom_summary_tree.item(selected_item_id)['values']
