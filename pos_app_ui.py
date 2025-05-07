@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import logging
-import gui_utils # Needed for CURRENCY_SYMBOL
+import gui_utils # Needed for CURRENCY_SYMBOL and new color constants
 
 # --- UI Class ---
 class POSAppUI:
@@ -19,74 +19,65 @@ class POSAppUI:
         """
         logging.debug("Initializing POSAppUI...")
         self.root = root
-        self.style = style # Store style reference if needed for widget creation
+        self.style = style
 
-        # --- Initialize UI Variables ---
         self.status_var = tk.StringVar()
         self.customer_display_var = tk.StringVar()
-        self.latest_customer_name_var = tk.StringVar() # New StringVar for the label
+        self.latest_customer_name_var = tk.StringVar()
         self.product_listbox = None
         self.sale_tree = None
         self.total_label = None
         self.product_canvas = None
         self.scrollable_frame = None
-        self.first_product_button = None # Will be set during button population
+        self.first_product_button = None
 
-        # --- Setup Main Frames and Panels ---
         self._setup_frames()
         self._setup_status_bar()
         self._setup_product_panel()
-        self._setup_sale_panel() # Modified to include new label
+        self._setup_sale_panel()
         logging.debug("POSAppUI Initialization complete.")
 
     def _setup_frames(self):
-        """Create and grid the main frames."""
         logging.debug("Setting up main frames.")
         self.product_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
         self.sale_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
         self.product_frame.grid(row=0, column=0, sticky="nsew")
         self.sale_frame.grid(row=0, column=1, sticky="nsew")
 
-        # Configure product frame grid
         self.product_frame.columnconfigure(0, weight=1)
         self.product_frame.columnconfigure(1, weight=0)
-        self.product_frame.rowconfigure(0, weight=0) # Label row
-        self.product_frame.rowconfigure(1, weight=1) # Product button canvas row
-        self.product_frame.rowconfigure(2, weight=0) # Separator/Label row
-        self.product_frame.rowconfigure(3, weight=1) # Product management list area
-        self.product_frame.rowconfigure(4, weight=0) # Mgmt buttons row
+        self.product_frame.rowconfigure(0, weight=0)
+        self.product_frame.rowconfigure(1, weight=1)
+        self.product_frame.rowconfigure(2, weight=0)
+        self.product_frame.rowconfigure(3, weight=1)
+        self.product_frame.rowconfigure(4, weight=0)
 
-        # Configure sale frame grid
         self.sale_frame.columnconfigure(0, weight=1)
         self.sale_frame.columnconfigure(1, weight=0)
-        self.sale_frame.rowconfigure(0, weight=0) # Header Label row
-        self.sale_frame.rowconfigure(1, weight=1) # Sale Treeview row
-        # --- MODIFIED: Add row for latest customer label ---
-        self.sale_frame.rowconfigure(2, weight=0) # Customer Info row (Select Button, Current Cust)
-        self.sale_frame.rowconfigure(3, weight=0) # Latest Customer row
-        self.sale_frame.rowconfigure(4, weight=0) # Finalize/Total row
-        self.sale_frame.rowconfigure(5, weight=0) # Action Buttons row
+        self.sale_frame.rowconfigure(0, weight=0)
+        self.sale_frame.rowconfigure(1, weight=1)
+        self.sale_frame.rowconfigure(2, weight=0)
+        self.sale_frame.rowconfigure(3, weight=0)
+        self.sale_frame.rowconfigure(4, weight=0)
+        self.sale_frame.rowconfigure(5, weight=0)
 
     def _setup_status_bar(self):
-        """Create the status bar."""
         logging.debug("Setting up status bar.")
-        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2), style='Status.TLabel')
+        # The style for this label will be changed dynamically by POSAppLogic
+        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2), style='Status.TLabel') # Default style
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky='ew')
 
     def _setup_product_panel(self):
-        """Create widgets for the product selection and management panel."""
         logging.debug("Setting up product panel.")
-        # --- Product Buttons Area ---
         ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w')
         self.product_canvas = tk.Canvas(self.product_frame, bg=self.style.lookup('App.TFrame', 'background'), highlightthickness=0)
         product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.product_canvas, style='App.TFrame') # Frame inside canvas
+        self.scrollable_frame = ttk.Frame(self.product_canvas, style='App.TFrame')
         self.product_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw", tags="scrollable_frame")
         self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
         self.product_canvas.grid(row=1, column=0, sticky="nsew")
         product_scrollbar.grid(row=1, column=1, sticky="ns")
 
-        # --- Product Management Area ---
         ttk.Separator(self.product_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
         ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold"), style='Header.TLabel').grid(row=2, column=0, columnspan=2, pady=(5, 2), sticky='w')
 
@@ -95,16 +86,14 @@ class POSAppUI:
         self.product_list_frame.rowconfigure(0, weight=1)
         self.product_list_frame.columnconfigure(0, weight=1)
 
-        listbox_select_bg = getattr(self.style, 'listbox_select_bg', '#3CB371')
-        listbox_select_fg = getattr(self.style, 'listbox_select_fg', '#FFFFFF')
-
+        # Use defined selection colors for tk.Listbox
         self.product_listbox = tk.Listbox(
             self.product_list_frame,
             exportselection=False,
-            bg="#FFFFFF",
-            fg="#000000",
-            selectbackground=listbox_select_bg,
-            selectforeground=listbox_select_fg,
+            bg="#FFFFFF", # Standard background
+            fg="#000000", # Standard foreground
+            selectbackground=gui_utils.LISTBOX_SELECT_BG, # Use constant
+            selectforeground=gui_utils.LISTBOX_SELECT_FG, # Use constant
             borderwidth=1,
             relief="sunken"
         )
@@ -113,7 +102,6 @@ class POSAppUI:
         self.product_listbox.grid(row=0, column=0, sticky="nsew")
         product_list_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        # Management Buttons (commands will be set by logic class)
         product_mgmt_button_frame = ttk.Frame(self.product_frame, style='App.TFrame')
         product_mgmt_button_frame.grid(row=4, column=0, columnspan=2, pady=5, sticky='w')
         self.add_product_button = ttk.Button(product_mgmt_button_frame, text="Add New Product", style='Action.TButton')
@@ -125,13 +113,10 @@ class POSAppUI:
         self.remove_product_button.pack(side=tk.LEFT, padx=2)
         self.view_customers_button.pack(side=tk.LEFT, padx=2)
 
-    # --- MODIFIED: Added Latest Customer Label ---
     def _setup_sale_panel(self):
-        """Create widgets for the current sale panel."""
         logging.debug("Setting up sale panel.")
         ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=5, sticky='w')
 
-        # Sale Treeview (Row 1)
         columns = ("item", "quantity", "price", "subtotal")
         self.sale_tree = ttk.Treeview(self.sale_frame, columns=columns, show="headings", selectmode="browse", style="Custom.Treeview")
         self.sale_tree.heading("item", text="Item")
@@ -147,27 +132,22 @@ class POSAppUI:
         self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2)
         sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2)
 
-        # Customer Selection Area (Row 2)
         customer_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        customer_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=(5,0)) # Reduced bottom padding
+        customer_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=(5,0))
         customer_frame.columnconfigure(1, weight=1)
         self.select_customer_button = ttk.Button(customer_frame, text="Select Customer (Ctrl+C)", style='Action.TButton')
         self.customer_display_label = ttk.Label(customer_frame, textvariable=self.customer_display_var, anchor=tk.W, style='TLabel')
         self.select_customer_button.grid(row=0, column=0, padx=(0, 5))
         self.customer_display_label.grid(row=0, column=1, sticky='ew')
 
-        # --- NEW: Latest Customer Label (Row 3) ---
         latest_customer_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        latest_customer_frame.grid(row=3, column=0, columnspan=2, sticky='ew', padx=5, pady=(0, 5)) # Padding top=0
-        latest_customer_frame.columnconfigure(0, weight=1) # Allow label to expand
-        # Label with smaller font, anchored left
+        latest_customer_frame.grid(row=3, column=0, columnspan=2, sticky='ew', padx=5, pady=(0, 5))
+        latest_customer_frame.columnconfigure(0, weight=1)
         self.latest_customer_label = ttk.Label(latest_customer_frame, textvariable=self.latest_customer_name_var, anchor=tk.W, style='TLabel', font=('Arial', 9))
-        self.latest_customer_label.grid(row=0, column=0, sticky='ew', padx=(5,0)) # Add small left padding
+        self.latest_customer_label.grid(row=0, column=0, sticky='ew', padx=(5,0))
 
-
-        # Finalize/Total Area (Row 4)
         finalize_total_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        finalize_total_frame.grid(row=4, column=0, columnspan=2, pady=(2,5), sticky="ew") # Adjusted row
+        finalize_total_frame.grid(row=4, column=0, columnspan=2, pady=(2,5), sticky="ew")
         finalize_total_frame.columnconfigure(0, weight=1)
         finalize_total_frame.columnconfigure(1, weight=0)
         finalize_total_frame.columnconfigure(2, weight=0)
@@ -176,16 +156,13 @@ class POSAppUI:
         self.finalize_button.grid(row=0, column=1, padx=(5, 10), sticky="e")
         self.total_label.grid(row=0, column=2, padx=(0, 5), sticky="e")
 
-        # Other Sale Action Buttons (Row 5)
         other_sale_actions_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        other_sale_actions_frame.grid(row=5, column=0, columnspan=2, pady=(0, 5), sticky="e") # Adjusted row
+        other_sale_actions_frame.grid(row=5, column=0, columnspan=2, pady=(0, 5), sticky="e")
         self.history_button = ttk.Button(other_sale_actions_frame, text="View History (Ctrl+H)", style='Action.TButton')
         self.clear_button = ttk.Button(other_sale_actions_frame, text="Clear Sale", style='Action.TButton')
         self.remove_item_button = ttk.Button(other_sale_actions_frame, text="Remove Item", style='Action.TButton')
         self.decrease_qty_button = ttk.Button(other_sale_actions_frame, text="- Qty", style='Action.TButton')
-        # Pack buttons right-to-left
         self.history_button.pack(side=tk.RIGHT, padx=2)
         self.clear_button.pack(side=tk.RIGHT, padx=2)
         self.remove_item_button.pack(side=tk.RIGHT, padx=2)
         self.decrease_qty_button.pack(side=tk.RIGHT, padx=2)
-

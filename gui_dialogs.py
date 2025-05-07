@@ -7,7 +7,7 @@ import os
 # import sqlite3 # Not directly used here
 
 import db_operations
-import gui_utils
+import gui_utils  # Import gui_utils to access new color constants
 
 
 # --- Custom Dialog for Price Input ---
@@ -24,8 +24,8 @@ class PriceInputDialog(tk.Toplevel):
 
         self.transient(parent)
         self.grab_set()
-        self.resizable(False, False)  # Typically, small input dialogs are fixed size
-        self.columnconfigure(0, weight=1)  # Allow entry to expand if window were resizable
+        self.resizable(False, False)
+        self.columnconfigure(0, weight=1)
 
         ttk.Label(self, text=prompt, wraplength=dialog_width - 20).grid(row=0, column=0, padx=10, pady=(10, 5),
                                                                         sticky='w')
@@ -54,16 +54,15 @@ class PriceInputDialog(tk.Toplevel):
         self.wait_window(self)
 
     def validate_price(self, P):
-        """Allow only digits and at most one decimal point."""
         if P == "": return True
         try:
             if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
-                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):  # Prevent "07"
+                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):
                     return False
                 return True
             else:
                 return False
-        except ValueError:  # Should not happen with the checks above but good practice
+        except ValueError:
             return False
 
     def on_ok(self):
@@ -95,20 +94,18 @@ class CustomerSelectionDialog(tk.Toplevel):
         gui_utils.set_window_icon(self)
 
         dialog_width = 350
-        dialog_height = 300  # Increased height for listbox, can be resized
+        dialog_height = 300
         self.result = None
         gui_utils.center_window(self, dialog_width, dialog_height)
 
         self.transient(parent)
         self.grab_set()
 
-        # Make this dialog resizable
         self.resizable(True, True)
-        self.minsize(dialog_width, 250)  # Set a minimum practical size
+        self.minsize(dialog_width, 250)
 
-        # Configure main column and listbox row to expand
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)  # Listbox frame row
+        self.rowconfigure(2, weight=1)
 
         ttk.Label(self, text="Enter or select customer name:").grid(row=0, column=0, pady=(10, 2), padx=10, sticky='w')
 
@@ -118,18 +115,24 @@ class CustomerSelectionDialog(tk.Toplevel):
 
         self.customer_var = tk.StringVar()
         self.customer_entry = ttk.Entry(self, textvariable=self.customer_var, width=40)
-        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')  # Entry expands horizontally
+        self.customer_entry.grid(row=1, column=0, pady=(0, 2), padx=10, sticky='ew')
         self.customer_entry.focus_set()
         self.customer_entry.bind('<KeyRelease>', self.update_suggestions)
 
-        # Frame for Listbox and Scrollbar (this frame will contain the listbox)
-        self.list_frame = ttk.Frame(self)  # Store as instance variable
-        self.list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')  # Frame expands
-        self.list_frame.rowconfigure(0, weight=1)  # Row inside list_frame expands
-        self.list_frame.columnconfigure(0, weight=1)  # Column inside list_frame expands
+        self.list_frame = ttk.Frame(self)
+        self.list_frame.grid(row=2, column=0, padx=10, pady=(0, 5), sticky='nsew')
+        self.list_frame.rowconfigure(0, weight=1)
+        self.list_frame.columnconfigure(0, weight=1)
 
-        self.suggestion_listbox = tk.Listbox(self.list_frame, height=5, exportselection=False)
-        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')  # Listbox expands within its frame
+        # Use defined selection colors for tk.Listbox
+        self.suggestion_listbox = tk.Listbox(
+            self.list_frame,
+            height=5,
+            exportselection=False,
+            selectbackground=gui_utils.LISTBOX_SELECT_BG,  # Use constant
+            selectforeground=gui_utils.LISTBOX_SELECT_FG  # Use constant
+        )
+        self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')
         self.suggestion_listbox.bind('<Double-Button-1>', self.on_suggestion_select)
         self.suggestion_listbox.bind('<Return>', self.on_suggestion_select)
 
@@ -137,9 +140,8 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.suggestion_listbox.configure(yscrollcommand=list_scrollbar.set)
         list_scrollbar.grid(row=0, column=1, sticky='ns')
 
-        self.list_frame.grid_remove()  # Initially hide
+        self.list_frame.grid_remove()
 
-        # Button frame (Row 3)
         button_frame = ttk.Frame(self)
         button_frame.grid(row=3, column=0, pady=10)
         ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
@@ -152,15 +154,13 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.wait_window(self)
 
     def update_suggestions(self, event=None):
-        """Filter customer list based on typed text and show in listbox."""
         current_text = self.customer_var.get()
         typed_lower = current_text.lower()
 
-        # Simplified key check, primarily for printable chars and backspace/delete
         if event and event.keysym and len(event.keysym) > 1 and event.keysym not in ('BackSpace', 'Delete', 'Shift_L',
                                                                                      'Shift_R', 'Control_L',
                                                                                      'Control_R'):
-            if not event.keysym.startswith('F'):  # Allow F-keys
+            if not event.keysym.startswith('F'):
                 return
 
         self.suggestion_listbox.delete(0, tk.END)
@@ -174,12 +174,11 @@ class CustomerSelectionDialog(tk.Toplevel):
         if suggestions:
             for name in suggestions[:10]:
                 self.suggestion_listbox.insert(tk.END, name)
-            self.list_frame.grid()  # Show the listbox frame
+            self.list_frame.grid()
         else:
             self.list_frame.grid_remove()
 
     def on_suggestion_select(self, event=None):
-        """Update entry field when a suggestion is clicked or Enter is pressed on listbox."""
         selection_indices = self.suggestion_listbox.curselection()
         if selection_indices:
             selected_name = self.suggestion_listbox.get(selection_indices[0])
@@ -189,10 +188,9 @@ class CustomerSelectionDialog(tk.Toplevel):
             self.customer_entry.focus_set()
 
     def on_ok(self):
-        """Handle OK button click. Add new customer if necessary."""
         selected_name = self.customer_var.get().strip()
         if not selected_name:
-            self.result = "N/A"  # Default to N/A if empty
+            self.result = "N/A"
         else:
             self.result = selected_name
             is_new = True
@@ -200,15 +198,12 @@ class CustomerSelectionDialog(tk.Toplevel):
             for existing_name in current_db_names:
                 if selected_name.lower() == existing_name.lower():
                     is_new = False
-                    self.result = existing_name  # Use the existing cased name
+                    self.result = existing_name
                     break
             if is_new and selected_name != 'N/A':
                 logging.info(f"Adding new customer from dialog: {selected_name}")
                 if not db_operations.add_customer_to_db(selected_name, None, None):
                     logging.warning(f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")
-                    # Optionally show error, or let db_operations handle it
-                    # For now, we proceed with the name entered by user even if DB add failed.
-                    # Caller should be aware.
         self.destroy()
 
     def on_cancel(self):
@@ -232,10 +227,9 @@ class CustomPriceDialog(tk.Toplevel):
 
         self.transient(parent)
         self.grab_set()
-        self.resizable(False, False)  # Typically, small input dialogs are fixed size
+        self.resizable(False, False)
 
-        # Configure columns for expansion if it were resizable
-        self.columnconfigure(1, weight=1)  # Allow entry/combobox to expand
+        self.columnconfigure(1, weight=1)
 
         ttk.Label(self, text="Product:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
         self.product_var = tk.StringVar()
@@ -271,11 +265,10 @@ class CustomPriceDialog(tk.Toplevel):
         self.wait_window(self)
 
     def validate_price(self, P):
-        """Allow only digits and at most one decimal point."""
         if P == "": return True
         try:
             if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
-                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):  # Prevent "07"
+                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):
                     return False
                 return True
             else:
@@ -284,7 +277,6 @@ class CustomPriceDialog(tk.Toplevel):
             return False
 
     def validate_quantity(self, P):
-        """Allow only positive integers for quantity."""
         if P == "": return True
         if P.isdigit() and int(P) > 0:
             return True
