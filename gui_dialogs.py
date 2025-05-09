@@ -4,7 +4,6 @@ from tkinter import messagebox
 from tkinter import simpledialog
 import datetime
 import os
-# import sqlite3 # Not directly used here
 import logging  # <--- IMPORT ADDED HERE
 
 import db_operations
@@ -202,10 +201,9 @@ class CustomerSelectionDialog(tk.Toplevel):
                     self.result = existing_name
                     break
             if is_new and selected_name != 'N/A':
-                logging.info(f"Adding new customer from dialog: {selected_name}")  # This line caused the error
+                logging.info(f"Adding new customer from dialog: {selected_name}")
                 if not db_operations.add_customer_to_db(selected_name, None, None):
-                    logging.warning(
-                        f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")  # This line caused the error
+                    logging.warning(f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")
         self.destroy()
 
     def on_cancel(self):
