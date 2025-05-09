@@ -5,9 +5,10 @@ from tkinter import simpledialog
 import datetime
 import os
 # import sqlite3 # Not directly used here
+import logging  # <--- IMPORT ADDED HERE
 
 import db_operations
-import gui_utils  # Import gui_utils to access new color constants
+import gui_utils
 
 
 # --- Custom Dialog for Price Input ---
@@ -54,6 +55,7 @@ class PriceInputDialog(tk.Toplevel):
         self.wait_window(self)
 
     def validate_price(self, P):
+        """Allow only digits and at most one decimal point."""
         if P == "": return True
         try:
             if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
@@ -124,13 +126,12 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.list_frame.rowconfigure(0, weight=1)
         self.list_frame.columnconfigure(0, weight=1)
 
-        # Use defined selection colors for tk.Listbox
         self.suggestion_listbox = tk.Listbox(
             self.list_frame,
             height=5,
             exportselection=False,
-            selectbackground=gui_utils.LISTBOX_SELECT_BG,  # Use constant
-            selectforeground=gui_utils.LISTBOX_SELECT_FG  # Use constant
+            selectbackground=gui_utils.LISTBOX_SELECT_BG,
+            selectforeground=gui_utils.LISTBOX_SELECT_FG
         )
         self.suggestion_listbox.grid(row=0, column=0, sticky='nsew')
         self.suggestion_listbox.bind('<Double-Button-1>', self.on_suggestion_select)
@@ -201,9 +202,10 @@ class CustomerSelectionDialog(tk.Toplevel):
                     self.result = existing_name
                     break
             if is_new and selected_name != 'N/A':
-                logging.info(f"Adding new customer from dialog: {selected_name}")
+                logging.info(f"Adding new customer from dialog: {selected_name}")  # This line caused the error
                 if not db_operations.add_customer_to_db(selected_name, None, None):
-                    logging.warning(f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")
+                    logging.warning(
+                        f"Could not add new customer '{selected_name}' via dialog (db_operations failed).")  # This line caused the error
         self.destroy()
 
     def on_cancel(self):
