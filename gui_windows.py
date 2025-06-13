@@ -58,10 +58,10 @@ class POSApp:
     def _configure_root_window(self):
         """Configure the main application window."""
         self.root.title("SEASIDE Water Refilling Station - POS")
-        app_width = 850
-        app_height = 750
+        app_width = 1050
+        app_height = 800
         self.root.geometry(f"{app_width}x{app_height}")
-        self.root.minsize(700, 600)
+        self.root.minsize(800, 650)
         self.root.resizable(False, False)
         gui_utils.set_window_icon(self.root) # gui_utils might have its own logging/print
         gui_utils.center_window(self.root, app_width, app_height)

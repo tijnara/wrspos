@@ -44,10 +44,10 @@ class POSAppLogic:
         # --- MODIFIED TITLE HERE ---
         self.root.title("SEASIDE")  # Changed from "Seaside" to "SEASIDE"
         # --- End of Modification ---
-        app_width = 850  # Default width
-        app_height = 750  # Default height
+        app_width = 1050  # Default width (increased from 850)
+        app_height = 800  # Default height (increased from 750)
         self.root.geometry(f"{app_width}x{app_height}")
-        self.root.minsize(700, 600)  # Minimum size
+        self.root.minsize(800, 650)  # Minimum size (increased from 700, 600)
         # self.root.resizable(False, False) # Keep this if you don't want resizing
         gui_utils.set_window_icon(self.root)
         gui_utils.center_window(self.root, app_width, app_height)
@@ -154,6 +154,7 @@ class POSAppLogic:
         self.ui.view_customers_button.config(command=self.view_customers)
         self.ui.select_customer_button.config(command=self.select_customer_for_sale)
         self.ui.finalize_button.config(command=self.finalize_sale)
+        self.ui.finalize_with_date_button.config(command=self.finalize_sale_with_date)
         self.ui.history_button.config(command=self.view_sales_history)
         self.ui.clear_button.config(command=self.clear_sale)
         self.ui.remove_item_button.config(command=self.remove_selected_item_from_sale)
@@ -810,6 +811,100 @@ class POSAppLogic:
         else:
             logging.error(f"Failed to save sale/items for '{self.current_customer_name}'. Sale ID: {sale_id}")
             self.show_status("Error saving sale.", status_type="error")
+
+    def finalize_sale_with_date(self):
+        """Finalizes the current sale with a custom date, saves to DB, shows receipt."""
+        logging.info("Attempting to finalize sale with custom date.")
+        if not self.current_sale:
+            logging.warning("Finalize with date failed: Empty sale.")
+            messagebox.showwarning("Empty Sale", "Cannot finalize empty sale.", parent=self.root)
+            self.show_status("Cannot finalize an empty sale.", status_type="error")
+            return
+        if self.current_customer_name == "N/A":
+            logging.warning("Finalize with date failed: No customer.")
+            messagebox.showwarning("No Customer", "Select customer first.", parent=self.root)
+            self.show_status("Please select a customer.", status_type="error")
+            return
+            
+        if DateEntry is None:
+            logging.error("tkcalendar not found for date selection.")
+            messagebox.showerror("Missing Library", "tkcalendar not installed.", parent=self.root)
+            self.show_status("tkcalendar library missing for date selection.", status_type="error")
+            return
+            
+        # Create a dialog window for date selection
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Sale Date")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center the dialog
+        dialog.geometry("+%d+%d" % (self.root.winfo_rootx() + 50,
+                                   self.root.winfo_rooty() + 50))
+        
+        # Add date picker
+        date_frame = ttk.Frame(dialog, padding="10")
+        date_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(date_frame, text="Select sale date:").pack(pady=(0, 5))
+        date_picker = DateEntry(date_frame, width=12, background='darkblue',
+                              foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        date_picker.pack(pady=5)
+        
+        # Add buttons
+        button_frame = ttk.Frame(dialog, padding="5")
+        button_frame.pack(fill=tk.X, pady=5)
+        
+        def on_ok():
+            selected_date = date_picker.get_date()
+            dialog.destroy()
+            self._process_finalize_with_date(selected_date)
+            
+        def on_cancel():
+            dialog.destroy()
+            self.show_status("Sale finalization cancelled.", status_type="info")
+            
+        ttk.Button(button_frame, text="OK", command=on_ok).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.RIGHT)
+        
+        # Make dialog modal
+        dialog.wait_window()
+        
+    def _process_finalize_with_date(self, selected_date):
+        """Process the finalization with the selected date."""
+        logging.info(f"Processing sale finalization with date: {selected_date}")
+        items_for_db = []
+        for item_key in self.current_sale:
+            details = self.current_sale[item_key]
+            items_for_db.append({
+                'name': details['name'],
+                'price': details['price'],
+                'quantity': details['quantity']
+            })
+            
+        # Convert selected_date to datetime if it's a date object
+        if isinstance(selected_date, datetime.date):
+            selected_date = datetime.datetime.combine(selected_date, datetime.time.min)
+            
+        sale_id = db_operations.save_sale_record(selected_date, self.total_amount, self.current_customer_name)
+        if sale_id and db_operations.save_sale_items_records(sale_id, items_for_db):
+            receipt = self.generate_receipt_text(sale_id, selected_date, self.current_customer_name)
+            logging.info(f"Sale {sale_id} saved with custom date.")
+            logging.debug(f"--- Receipt {sale_id} ---\n{receipt}\n---------------")
+            messagebox.showinfo(f"Sale Finalized - ID: {sale_id}", receipt, parent=self.root)
+            
+            # Clear sale state after successful save
+            previous_customer = self.current_customer_name
+            self.current_sale = {}
+            self.current_customer_name = "N/A"
+            if hasattr(self.ui, 'customer_display_var'):
+                self.ui.customer_display_var.set(f"Customer: {self.current_customer_name}")
+            self._update_latest_customer_label()
+            self.update_sale_display()
+            self.show_status(f"Sale {sale_id} recorded with custom date.", status_type="success")
+        else:
+            logging.error(f"Failed to save sale/items with custom date for '{self.current_customer_name}'. Sale ID: {sale_id}")
+            self.show_status("Error saving sale with custom date.", status_type="error")
 
     def view_sales_history(self):
         logging.info("Opening sales history.")

@@ -38,11 +38,13 @@ class SalesHistoryWindow(tk.Toplevel):
         self.chart_window = None
         self.todays_items_window = None
         self.todays_items_tree = None
+        self.todays_receipt_count = 0
+        self.custom_range_receipt_count = 0  # NEW: Instance variable for custom range receipt count
 
         win_width = 850
-        win_height = 680  # Reduced height slightly as Avg Sale label is removed
+        win_height = 680
         self.geometry(f"{win_width}x{win_height}")
-        self.minsize(700, 480)  # Adjusted min height
+        self.minsize(700, 480)
         gui_utils.center_window(self, win_width, win_height)
 
         self.resizable(True, True)
@@ -65,7 +67,6 @@ class SalesHistoryWindow(tk.Toplevel):
         ttk.Label(self, text="Receipt Details", font=("Arial", 14, "bold")).grid(row=0, column=1, pady=10, padx=10,
                                                                                  sticky="w")
 
-        # Sales List Treeview (Row 1, Column 0)
         list_frame = ttk.Frame(self)
         list_frame.grid(row=1, column=0, sticky="nsew", padx=(10, 5), pady=5)
         list_frame.rowconfigure(0, weight=1)
@@ -93,7 +94,6 @@ class SalesHistoryWindow(tk.Toplevel):
         self.sales_tree.bind("<Down>", self._handle_sales_tree_nav)
         self.sales_tree.bind("<Delete>", self._handle_sales_tree_delete)
 
-        # Receipt Details Text Area (Row 1, Column 1)
         text_frame = ttk.Frame(self)
         text_frame.grid(row=1, column=1, sticky="nsew", padx=(5, 10), pady=5)
         text_frame.rowconfigure(0, weight=1)
@@ -105,7 +105,6 @@ class SalesHistoryWindow(tk.Toplevel):
         self.receipt_text.configure(yscrollcommand=receipt_text_scrollbar.set)
         receipt_text_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        # --- Today's Sales Summary (Row 2) ---
         today_frame = ttk.LabelFrame(self, text="Today's Sales", padding="5")
         today_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 5))
         today_frame.columnconfigure(0, weight=0)
@@ -117,7 +116,6 @@ class SalesHistoryWindow(tk.Toplevel):
                                                    command=self.view_todays_items)
         self.view_todays_items_button.grid(row=0, column=1, sticky="e", padx=5, pady=2)
 
-        # Default Summaries (Row 3)
         summary_frame = ttk.LabelFrame(self, text="Default Summaries", padding="5")
         summary_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 5))
         summary_frame.columnconfigure(0, weight=0)
@@ -128,7 +126,6 @@ class SalesHistoryWindow(tk.Toplevel):
                                           font=("Arial", 10))
         self.week_total_label.grid(row=0, column=1, sticky="e", padx=5, pady=1)
 
-        # Custom Date Range Selection (Row 4)
         custom_entry_frame = ttk.LabelFrame(self, text="Custom Date Range", padding="10")
         custom_entry_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
         custom_entry_frame.columnconfigure(1, weight=0)
@@ -163,12 +160,14 @@ class SalesHistoryWindow(tk.Toplevel):
         view_range_button.grid(row=0, column=4, padx=(10, 5), pady=5, sticky='e')
 
         # Custom Date Range Details Treeview (Row 5)
-        custom_summary_tree_frame = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5")
-        custom_summary_tree_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
-        custom_summary_tree_frame.rowconfigure(0, weight=1)
-        custom_summary_tree_frame.columnconfigure(0, weight=1)
+        # --- MODIFIED: Store LabelFrame to update its text ---
+        self.custom_summary_labelframe = ttk.LabelFrame(self, text="Custom Date Range Details", padding="5")
+        self.custom_summary_labelframe.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
+        # --- End of Modification ---
+        self.custom_summary_labelframe.rowconfigure(0, weight=1)
+        self.custom_summary_labelframe.columnconfigure(0, weight=1)
         self.summary_columns = ('product', 'total_qty', 'total_revenue')
-        self.custom_summary_tree = ttk.Treeview(custom_summary_tree_frame, columns=self.summary_columns,
+        self.custom_summary_tree = ttk.Treeview(self.custom_summary_labelframe, columns=self.summary_columns,
                                                 show="headings", selectmode="browse")
         self.custom_summary_tree.heading('product', text='Product')
         self.custom_summary_tree.heading('total_qty', text='Total Qty Sold')
@@ -177,7 +176,7 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.column('total_qty', anchor=tk.CENTER, width=100, stretch=False)
         self.custom_summary_tree.column('total_revenue', anchor=tk.E, width=120, stretch=False)
         self.custom_summary_tree.grid(row=0, column=0, sticky='nsew')
-        summary_scrollbar = ttk.Scrollbar(custom_summary_tree_frame, orient="vertical",
+        summary_scrollbar = ttk.Scrollbar(self.custom_summary_labelframe, orient="vertical",
                                           command=self.custom_summary_tree.yview)
         self.custom_summary_tree.configure(yscrollcommand=summary_scrollbar.set)
         summary_scrollbar.grid(row=0, column=1, sticky='ns')
@@ -188,30 +187,23 @@ class SalesHistoryWindow(tk.Toplevel):
         self.custom_summary_tree.bind("<Return>", self._handle_summary_tree_activate)
         self.custom_summary_tree.bind("<space>", self._handle_summary_tree_activate)
 
-        # Custom Range Grand Total Label and Export Button (Row 6)
-        # --- MODIFIED: Removed Avg Sale Label ---
         custom_total_frame = ttk.Frame(self)
         custom_total_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 5))
-        custom_total_frame.columnconfigure(0, weight=1)  # Allow labels to take space
-        custom_total_frame.columnconfigure(1, weight=0)  # Keep button/total to the right
+        custom_total_frame.columnconfigure(0, weight=1)
+        custom_total_frame.columnconfigure(1, weight=0)
 
-        # Items Label (now on row 0)
         self.custom_range_items_label = ttk.Label(custom_total_frame, text="Items: 0", font=("Arial", 10))
-        self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5, pady=(0, 2))  # Added bottom padding
+        self.custom_range_items_label.grid(row=0, column=0, sticky="w", padx=5, pady=(0, 2))
 
-        # Total Label (now on row 0, column 1)
         self.custom_range_grand_total_label = ttk.Label(custom_total_frame,
                                                         text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00",
                                                         font=("Arial", 10, "bold"))
         self.custom_range_grand_total_label.grid(row=0, column=1, sticky="e", padx=(10, 0))
 
-        # Export Button (now on row 1, column 1)
         export_summary_button = ttk.Button(custom_total_frame, text="Export Summary",
                                            command=self.export_summary_to_csv)
         export_summary_button.grid(row=1, column=1, sticky="e", padx=(10, 0), pady=(2, 0))
-        # --- End of Modification ---
 
-        # Action Buttons (Row 7)
         action_button_frame = ttk.Frame(self)
         action_button_frame.grid(row=7, column=0, columnspan=2, pady=10)
         graph_button = ttk.Button(action_button_frame, text="Sales Graph", command=self.open_sales_chart)
@@ -224,7 +216,6 @@ class SalesHistoryWindow(tk.Toplevel):
         close_button = ttk.Button(action_button_frame, text="Close", command=self.destroy)
         close_button.pack(side=tk.LEFT, padx=10)
 
-        # Initial data population
         self.populate_sales_list()
         self.update_default_summaries()
         self.update_todays_summary()
@@ -232,13 +223,9 @@ class SalesHistoryWindow(tk.Toplevel):
 
         self.bind('<Escape>', lambda event=None: self.destroy())
 
-    # --- NEW Keyboard Navigation Handlers ---
-
     def _handle_sales_tree_nav(self, event):
-        """Handles Up/Down arrow key navigation in the sales_tree."""
         tree = event.widget
         focused_item = tree.focus()
-
         if not focused_item:
             children = tree.get_children()
             if children:
@@ -255,7 +242,6 @@ class SalesHistoryWindow(tk.Toplevel):
                 if next_item:
                     tree.focus(next_item)
                     tree.selection_set(next_item)
-
         new_focus = tree.focus()
         if new_focus:
             tree.see(new_focus)
@@ -263,7 +249,6 @@ class SalesHistoryWindow(tk.Toplevel):
         return "break"
 
     def _handle_sales_tree_delete(self, event):
-        """Handles Delete key press on the sales_tree."""
         logging.debug("Delete key pressed on sales tree.")
         focused_item = self.sales_tree.focus()
         if focused_item:
@@ -271,10 +256,8 @@ class SalesHistoryWindow(tk.Toplevel):
         return "break"
 
     def _handle_summary_tree_nav(self, event):
-        """Handles Up/Down arrow key navigation in the custom_summary_tree."""
         tree = event.widget
         focused_item = tree.focus()
-
         if not focused_item:
             children = tree.get_children()
             if children:
@@ -291,24 +274,19 @@ class SalesHistoryWindow(tk.Toplevel):
                 if next_item:
                     tree.focus(next_item)
                     tree.selection_set(next_item)
-
         new_focus = tree.focus()
         if new_focus:
             tree.see(new_focus)
         return "break"
 
     def _handle_summary_tree_activate(self, event):
-        """Handles Return/Space key press on the custom_summary_tree."""
         logging.debug(f"Summary tree activate event triggered by {event.keysym}")
         focused_item = self.custom_summary_tree.focus()
         if focused_item:
             self.on_summary_item_select()
         return "break"
 
-    # --- Existing Methods ---
-
     def populate_sales_list(self):
-        """Fetches sales and populates the sales Treeview."""
         current_focus_id = self.sales_tree.focus()
         for i in self.sales_tree.get_children():
             self.sales_tree.delete(i)
@@ -345,16 +323,15 @@ class SalesHistoryWindow(tk.Toplevel):
             self.update_receipt_display("")
 
     def update_todays_summary(self):
-        """Calculates and displays today's sales total."""
         today = datetime.date.today()
         start_today_dt_str = datetime.datetime.combine(today, datetime.time.min).isoformat()
         end_today_dt_str = (
             datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time.min)).isoformat()
-        today_revenue, _, _ = db_operations.fetch_sales_stats(start_today_dt_str, end_today_dt_str)
+        today_revenue, _, num_sales_today = db_operations.fetch_sales_stats(start_today_dt_str, end_today_dt_str)
         self.today_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{today_revenue:.2f}")
+        self.todays_receipt_count = num_sales_today
 
     def update_default_summaries(self):
-        """Calculates and displays weekly sales totals."""
         today = datetime.date.today()
         start_of_week = today + relativedelta(weekday=MO(-1))
         end_of_week = start_of_week + relativedelta(days=6)
@@ -369,8 +346,11 @@ class SalesHistoryWindow(tk.Toplevel):
         self.week_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{week_revenue:.2f}")
 
     def update_custom_summary(self):
-        """Calculates and displays detailed product summary for the selected date range."""
+        """Calculates and displays detailed product summary for the selected date range, including receipt count in LabelFrame."""
         current_focus_id = self.custom_summary_tree.focus()
+        # Default title if dates are invalid or no data
+        default_labelframe_text = "Custom Date Range Details"
+
         try:
             if DateEntry:
                 start_date = self.start_date_entry.get_date()
@@ -382,7 +362,7 @@ class SalesHistoryWindow(tk.Toplevel):
                     for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
                     self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
                     self.custom_range_items_label.config(text="Items: 0")
-                    # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
+                    self.custom_summary_labelframe.config(text=default_labelframe_text)  # Reset title
                     messagebox.showwarning("Missing Date", "Please enter both start and end dates.", parent=self)
                     return
                 start_date = datetime.datetime.strptime(start_date_str, '%Y-%m-%d').date()
@@ -392,7 +372,7 @@ class SalesHistoryWindow(tk.Toplevel):
                 for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
                 self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
                 self.custom_range_items_label.config(text="Items: 0")
-                # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
+                self.custom_summary_labelframe.config(text=default_labelframe_text)  # Reset title
                 messagebox.showwarning("Invalid Range", "Start date cannot be after end date.", parent=self)
                 return
 
@@ -428,31 +408,32 @@ class SalesHistoryWindow(tk.Toplevel):
                 self.custom_summary_tree.selection_set(first_item_id)
                 self.custom_summary_tree.see(first_item_id)
 
-            # Fetch stats but don't calculate or display average
             custom_revenue, custom_items, custom_sales_count = db_operations.fetch_sales_stats(start_date_dt_str,
                                                                                                end_date_dt_str)
-            # custom_avg = custom_revenue / custom_sales_count if custom_sales_count > 0 else 0.0 # Removed
+            self.custom_range_receipt_count = custom_sales_count  # Store receipt count
+
+            # Update LabelFrame text
+            self.custom_summary_labelframe.config(
+                text=f"Custom Date Range Details ({self.custom_range_receipt_count} Receipts)")
 
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}{custom_revenue:.2f}")
             self.custom_range_items_label.config(text=f"Items: {custom_items}")
-            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}{custom_avg:.2f}") # Removed
 
         except ValueError as ve:
             for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
             self.custom_range_items_label.config(text="Items: 0")
-            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
+            self.custom_summary_labelframe.config(text=default_labelframe_text)  # Reset title
             messagebox.showerror("Invalid Date Format", f"Please enter dates in YYYY-MM-DD format.\nError: {ve}",
                                  parent=self)
         except Exception as e:
             for i in self.custom_summary_tree.get_children(): self.custom_summary_tree.delete(i)
             self.custom_range_grand_total_label.config(text=f"Total: {gui_utils.CURRENCY_SYMBOL}0.00")
             self.custom_range_items_label.config(text="Items: 0")
-            # self.custom_range_avg_label.config(text=f"Avg Sale: {gui_utils.CURRENCY_SYMBOL}0.00") # Removed
+            self.custom_summary_labelframe.config(text=default_labelframe_text)  # Reset title
             messagebox.showerror("Error", f"Could not calculate custom summary: {e}", parent=self)
 
     def on_sale_select(self, event=None):
-        """Handles selection change in the sales Treeview to display receipt."""
         selected_item_id = self.sales_tree.focus()
         if not selected_item_id:
             self.update_receipt_display("Select a sale from the list to view details.")
@@ -462,7 +443,6 @@ class SalesHistoryWindow(tk.Toplevel):
             item_data = self.sales_tree.item(selected_item_id, 'values')
             if not item_data or len(item_data) < 5:
                 raise ValueError("Could not retrieve sale details from list.")
-
             timestamp_str_from_tree = item_data[2]
             customer_name_from_tree = item_data[3]
             total_display_from_tree = item_data[4]
@@ -475,7 +455,6 @@ class SalesHistoryWindow(tk.Toplevel):
             self.update_receipt_display("Error retrieving sale details.")
 
     def delete_selected_sale(self):
-        """Deletes the sale selected in the Treeview."""
         selected_item_id = self.sales_tree.focus()
         if not selected_item_id:
             messagebox.showwarning("No Selection", "Please select a sale from the list to delete.", parent=self)
@@ -503,14 +482,12 @@ class SalesHistoryWindow(tk.Toplevel):
             messagebox.showerror("Error", f"Could not determine selected sale ID: {e}", parent=self)
 
     def update_receipt_display(self, text_content):
-        """Updates the content of the receipt Text widget."""
         self.receipt_text.config(state="normal")
         self.receipt_text.delete(1.0, tk.END)
         self.receipt_text.insert(tk.END, text_content)
         self.receipt_text.config(state="disabled")
 
     def generate_detailed_receipt(self, sale_id, timestamp_str, customer_name, total_display, items):
-        """Generates receipt text from fetched data."""
         receipt = f"--- SEASIDE Water Refilling Station ---\n"
         receipt += f"Sales #: {sale_id}\n"
         receipt += f"Date: {timestamp_str}\n"
@@ -533,7 +510,6 @@ class SalesHistoryWindow(tk.Toplevel):
         return receipt
 
     def export_sales_to_csv(self):
-        """Exports the currently displayed sales list to a CSV file."""
         if not self.sales_tree.get_children():
             messagebox.showwarning("No Data", "There is no sales data to export.", parent=self)
             return
@@ -558,7 +534,6 @@ class SalesHistoryWindow(tk.Toplevel):
             logging.exception(f"Error exporting sales history: {e}")
 
     def export_summary_to_csv(self):
-        """Exports the currently displayed custom summary data to a CSV file."""
         if not self.custom_summary_tree.get_children():
             messagebox.showwarning("No Data", "There is no summary data to export.", parent=self)
             return
@@ -588,7 +563,6 @@ class SalesHistoryWindow(tk.Toplevel):
             logging.exception(f"Error exporting product summary: {e}")
 
     def on_summary_item_select(self, event=None):
-        """Displays details of the selected item in the custom summary treeview."""
         selected_item_id = self.custom_summary_tree.focus()
         if not selected_item_id:
             return
@@ -603,7 +577,6 @@ class SalesHistoryWindow(tk.Toplevel):
             messagebox.showerror("Error", "Could not retrieve details for the selected summary item.", parent=self)
 
     def open_sales_chart(self):
-        """Opens the sales chart window."""
         if SalesHistoryCharts is None:
             messagebox.showerror("Error",
                                  "Chart library components not found.\nPlease ensure gui_charts.py is present and matplotlib is installed.",
@@ -625,14 +598,15 @@ class SalesHistoryWindow(tk.Toplevel):
                                          self.chart_window) else self)
 
     def view_todays_items(self):
-        """Fetches and displays items sold today in a new window."""
         logging.info("Showing today's individual item sales summary.")
         today_str = datetime.date.today().strftime('%Y-%m-%d')
         items_data = db_operations.fetch_sales_items_for_date(today_str)
+        receipt_count_str = f"({self.todays_receipt_count} Receipts)"
+        window_title = f"Items Sold Today ({today_str}) - {receipt_count_str}"
 
         if self.todays_items_window is None or not tk.Toplevel.winfo_exists(self.todays_items_window):
             self.todays_items_window = tk.Toplevel(self)
-            self.todays_items_window.title(f"Items Sold Today ({today_str})")
+            self.todays_items_window.title(window_title)
             gui_utils.set_window_icon(self.todays_items_window)
             self.todays_items_window.geometry("500x400")
             gui_utils.center_window(self.todays_items_window, 500, 400)
@@ -660,6 +634,7 @@ class SalesHistoryWindow(tk.Toplevel):
             self.todays_items_tree.grid(row=0, column=0, sticky="nsew")
             scrollbar.grid(row=0, column=1, sticky="ns")
         else:
+            self.todays_items_window.title(window_title)
             self.todays_items_window.deiconify()
             self.todays_items_window.lift()
             self.todays_items_window.focus_set()
@@ -678,7 +653,6 @@ class SalesHistoryWindow(tk.Toplevel):
         self.todays_items_window.grab_set()
 
     def _close_todays_items_window(self):
-        """Handles closing the 'Today's Items' window."""
         if self.todays_items_window:
             self.todays_items_window.grab_release()
             self.todays_items_window.destroy()
