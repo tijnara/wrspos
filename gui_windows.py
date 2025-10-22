@@ -41,6 +41,17 @@ logging.getLogger().addHandler(console_handler)
 
 # --- Main Application Class ---
 class POSApp:
+    STYLE_APP_FRAME = 'App.TFrame'
+    STYLE_ACTION_BUTTON = 'Action.TButton'
+    STYLE_HEADER_LABEL = 'Header.TLabel'
+    STYLE_FINALIZE_BUTTON = 'Finalize.TButton'
+    STYLE_TOTAL_LABEL = 'Total.TLabel'
+    STYLE_STATUS_LABEL = 'Status.TLabel'
+    STYLE_PRODUCT_BUTTON = 'Product.TButton'
+    STYLE_LABEL = 'TLabel'
+    STYLE_CUSTOM_TREEVIEW = 'Custom.Treeview'
+    STYLE_CUSTOM_TREEVIEW_HEADING = 'Custom.Treeview.Heading'
+
     def __init__(self, root):
         """Initialize the POS Application."""
         logging.info("Initializing POS Application...")
@@ -56,7 +67,7 @@ class POSApp:
     # --- Initialization and Setup Methods ---
 
     def _configure_root_window(self):
-        """Configure the main application window."""
+        """Configure the main application window, set title, size, icon, and grid weights."""
         self.root.title("SEASIDE Water Refilling Station - POS")
         app_width = 1050
         app_height = 800
@@ -72,7 +83,7 @@ class POSApp:
         self.root.rowconfigure(1, weight=0)    # Status bar row
 
     def _setup_styles(self):
-        """Configures ttk styles for the application."""
+        """Configure ttk styles and color themes for the application widgets."""
         self.style = ttk.Style(self.root)
         try:
             self.style.theme_use('clam')
@@ -102,21 +113,21 @@ class POSApp:
 
         # --- Configure Styles ---
         self.style.configure('TFrame', background=BG_COLOR)
-        self.style.configure('App.TFrame', background=BG_COLOR)
+        self.style.configure(self.STYLE_APP_FRAME, background=BG_COLOR)
         self.style.configure('TLabel', background=BG_COLOR, foreground=LABEL_FG, font=('Arial', 10))
-        self.style.configure('Header.TLabel', background=BG_COLOR, foreground=HEADER_FG, font=('Arial', 12, 'bold'))
-        self.style.configure('Total.TLabel', background=BG_COLOR, foreground=TOTAL_FG, font=('Arial', 14, 'bold'))
-        self.style.configure('Status.TLabel', background=STATUS_BG, foreground=STATUS_FG, font=('Arial', 9))
+        self.style.configure(self.STYLE_HEADER_LABEL, background=BG_COLOR, foreground=HEADER_FG, font=('Arial', 12, 'bold'))
+        self.style.configure(self.STYLE_TOTAL_LABEL, background=BG_COLOR, foreground=TOTAL_FG, font=('Arial', 14, 'bold'))
+        self.style.configure(self.STYLE_STATUS_LABEL, background=STATUS_BG, foreground=STATUS_FG, font=('Arial', 9))
         self.style.configure('TButton', background=BUTTON_BG, foreground=BUTTON_FG, font=('Arial', 9), padding=5, borderwidth=1, relief='raised')
         self.style.map('TButton', background=[('active', BUTTON_ACTIVE)])
-        self.style.configure('Product.TButton', font=('Arial', 10, 'bold'), padding=(5, 10))
-        self.style.configure('Action.TButton', padding=4, font=('Arial', 9))
-        self.style.configure('Finalize.TButton', background=FINALIZE_BG, foreground='white', font=('Arial', 10, 'bold'), padding=6)
-        self.style.map('Finalize.TButton', background=[('active', FINALIZE_ACTIVE)])
-        self.style.configure("Custom.Treeview", rowheight=25, fieldbackground=TREE_ROW_BG_ODD, background=TREE_ROW_BG_ODD, foreground=LABEL_FG)
-        self.style.map("Custom.Treeview", background=[('selected', SELECT_BG)])
-        self.style.configure("Custom.Treeview.Heading", background=TREE_HEADING_BG, foreground=TREE_HEADING_FG, font=('Arial', 10, 'bold'), relief="flat")
-        self.style.map("Custom.Treeview.Heading", background=[('active', BUTTON_ACTIVE)])
+        self.style.configure(self.STYLE_PRODUCT_BUTTON, font=('Arial', 10, 'bold'), padding=(5, 10))
+        self.style.configure(self.STYLE_ACTION_BUTTON, padding=4, font=('Arial', 9))
+        self.style.configure(self.STYLE_FINALIZE_BUTTON, background=FINALIZE_BG, foreground='white', font=('Arial', 10, 'bold'), padding=6)
+        self.style.map(self.STYLE_FINALIZE_BUTTON, background=[('active', FINALIZE_ACTIVE)])
+        self.style.configure(self.STYLE_CUSTOM_TREEVIEW, rowheight=25, fieldbackground=TREE_ROW_BG_ODD, background=TREE_ROW_BG_ODD, foreground=LABEL_FG)
+        self.style.map(self.STYLE_CUSTOM_TREEVIEW, background=[('selected', SELECT_BG)])
+        self.style.configure(self.STYLE_CUSTOM_TREEVIEW_HEADING, background=TREE_HEADING_BG, foreground=TREE_HEADING_FG, font=('Arial', 10, 'bold'), relief="flat")
+        self.style.map(self.STYLE_CUSTOM_TREEVIEW_HEADING, background=[('active', BUTTON_ACTIVE)])
         self.style.configure('TEntry', fieldbackground='white', foreground='black')
         self.style.configure('TCombobox', fieldbackground='white', foreground='black')
         self.style.configure('TScrollbar', background=BUTTON_BG, troughcolor=BG_COLOR, borderwidth=0)
@@ -129,7 +140,7 @@ class POSApp:
         self.listbox_select_fg = LISTBOX_SELECT_FG
 
     def _initialize_variables(self):
-        """Initialize instance variables."""
+        """Initialize instance variables, load products, and set up status/customer variables."""
         logging.info("Initializing database...")
         db_operations.initialize_db() # Ensure DB is ready
         logging.info("Database initialized.")
@@ -145,17 +156,21 @@ class POSApp:
         self.customer_display_var = tk.StringVar(value=f"Customer: {self.current_customer_name}")
 
     def _setup_ui(self):
-        """Create and layout the main UI components."""
+        """Create and layout the main UI components by calling setup methods for menu, frames, panels, and status bar."""
         logging.debug("Setting up UI...")
-        self._setup_menu()
-        self._setup_frames()
-        self._setup_status_bar()
-        self._setup_product_panel()
-        self._setup_sale_panel()
-        logging.debug("UI setup complete.")
+        try:
+            self._setup_menu()
+            self._setup_frames()
+            self._setup_status_bar()
+            self._setup_product_panel()
+            self._setup_sale_panel()
+            logging.debug("UI setup complete.")
+        except Exception as e:
+            logging.exception("Error during UI setup.")
+            messagebox.showerror("UI Error", f"An error occurred during UI setup:\n{e}", parent=self.root)
 
     def _setup_menu(self):
-        """Creates the main menu bar."""
+        """Create the main menu bar and add file operations."""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -166,140 +181,164 @@ class POSApp:
         file_menu.add_command(label="Exit", command=self.root.quit)
 
     def _setup_frames(self):
-        """Create and grid the main frames."""
-        self.product_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
-        self.sale_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
-        self.product_frame.grid(row=0, column=0, sticky="nsew")
-        self.sale_frame.grid(row=0, column=1, sticky="nsew")
-
-        # Configure product frame grid
-        self.product_frame.columnconfigure(0, weight=1)
-        self.product_frame.columnconfigure(1, weight=0)
-        self.product_frame.rowconfigure(0, weight=0)
-        self.product_frame.rowconfigure(1, weight=1) # Product button canvas row
-        self.product_frame.rowconfigure(2, weight=0) # Separator/Label row
-        self.product_frame.rowconfigure(3, weight=1) # Product management list area
-        self.product_frame.rowconfigure(4, weight=0) # Mgmt buttons row
-
-        # Configure sale frame grid
-        self.sale_frame.columnconfigure(0, weight=1)
-        self.sale_frame.columnconfigure(1, weight=0)
-        self.sale_frame.rowconfigure(0, weight=0)
-        self.sale_frame.rowconfigure(1, weight=1) # Sale Treeview row
-        self.sale_frame.rowconfigure(2, weight=0)
-        self.sale_frame.rowconfigure(3, weight=0)
-        self.sale_frame.rowconfigure(4, weight=0)
+        """Create and grid the main frames for product and sale panels, and configure their grid weights."""
+        try:
+            self.product_frame = ttk.Frame(self.root, padding="5", style=self.STYLE_APP_FRAME)
+            self.sale_frame = ttk.Frame(self.root, padding="5", style=self.STYLE_APP_FRAME)
+            self.product_frame.grid(row=0, column=0, sticky="nsew")
+            self.sale_frame.grid(row=0, column=1, sticky="nsew")
+            self.product_frame.grid_propagate(False)
+            self.sale_frame.grid_propagate(False)
+            self.product_frame.columnconfigure(0, weight=1)
+            self.product_frame.columnconfigure(1, weight=0)
+            self.product_frame.rowconfigure(0, weight=0)
+            self.product_frame.rowconfigure(1, weight=1)
+            self.product_frame.rowconfigure(2, weight=0)
+            self.product_frame.rowconfigure(3, weight=1)
+            self.product_frame.rowconfigure(4, weight=0)
+            self.sale_frame.columnconfigure(0, weight=1)
+            self.sale_frame.columnconfigure(1, weight=0)
+            self.sale_frame.rowconfigure(0, weight=0)
+            self.sale_frame.rowconfigure(1, weight=1)
+            self.sale_frame.rowconfigure(2, weight=0)
+            self.sale_frame.rowconfigure(3, weight=0)
+            self.sale_frame.rowconfigure(4, weight=0)
+        except Exception as e:
+            logging.exception("Error during frame setup.")
+            messagebox.showerror("Frame Error", f"An error occurred during frame setup:\n{e}", parent=self.root)
 
     def _setup_status_bar(self):
-        """Create the status bar."""
-        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2), style='Status.TLabel')
-        self.status_bar.grid(row=1, column=0, columnspan=2, sticky='ew')
+        """Create the status bar at the bottom of the main window."""
+        try:
+            self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2), style=self.STYLE_STATUS_LABEL)
+            self.status_bar.grid(row=1, column=0, columnspan=2, sticky='ew')
+        except Exception as e:
+            logging.exception("Error during status bar setup.")
+            messagebox.showerror("Status Bar Error", f"An error occurred during status bar setup:\n{e}", parent=self.root)
 
     def _setup_product_panel(self):
-        """Create widgets for the product selection and management panel."""
-        # --- Product Buttons Area ---
-        ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w')
-        self.product_canvas = tk.Canvas(self.product_frame, bg=self.style.lookup('App.TFrame', 'background'), highlightthickness=0)
-        product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.product_canvas, style='App.TFrame')
-        self.product_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw", tags="scrollable_frame") # Added tag
-        self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
-        self.product_canvas.grid(row=1, column=0, sticky="nsew")
-        product_scrollbar.grid(row=1, column=1, sticky="ns")
-        # Bind events for scrolling and resizing
-        self.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame)
-        self.product_canvas.bind('<Configure>', self._configure_scrollable_frame_width) # Bind canvas configure too
+        """Create widgets for the product selection and management panel, including product buttons and management controls."""
+        try:
+            # --- Product Buttons Area ---
+            ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold"), style=self.STYLE_HEADER_LABEL).grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w')
+            self.product_canvas = tk.Canvas(self.product_frame, bg=self.style.lookup(self.STYLE_APP_FRAME, 'background'), highlightthickness=0)
+            product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
+            self.scrollable_frame = ttk.Frame(self.product_canvas, style=self.STYLE_APP_FRAME)
+            self.product_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw", tags="scrollable_frame") # Added tag
+            self.product_canvas.configure(yscrollcommand=product_scrollbar.set)
+            self.product_canvas.grid(row=1, column=0, sticky="nsew")
+            product_scrollbar.grid(row=1, column=1, sticky="ns")
+            # Bind events for scrolling and resizing
+            self.scrollable_frame.bind('<Configure>', self._configure_scrollable_frame)
+            self.product_canvas.bind('<Configure>', self._configure_scrollable_frame_width) # Bind canvas configure too
 
-        # --- Product Management Area ---
-        ttk.Separator(self.product_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
-        ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold"), style='Header.TLabel').grid(row=2, column=0, columnspan=2, pady=(5, 2), sticky='w')
+            # --- Product Management Area ---
+            ttk.Separator(self.product_frame, orient='horizontal').grid(row=2, column=0, columnspan=2, sticky='ew', pady=10)
+            ttk.Label(self.product_frame, text="Manage Products", font=("Arial", 12, "bold"), style=self.STYLE_HEADER_LABEL).grid(row=2, column=0, columnspan=2, pady=(5, 2), sticky='w')
 
-        self.product_list_frame = ttk.Frame(self.product_frame, style='App.TFrame')
-        self.product_list_frame.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=2)
-        self.product_list_frame.rowconfigure(0, weight=1)
-        self.product_list_frame.columnconfigure(0, weight=1)
-        # ***MODIFIED***: Apply new selection colors directly to the Listbox
-        self.product_listbox = tk.Listbox(
-            self.product_list_frame,
-            exportselection=False,
-            bg="#FFFFFF",
-            fg="#000000",
-            selectbackground=self.listbox_select_bg, # Use stored style color
-            selectforeground=self.listbox_select_fg, # Use stored style color
-            borderwidth=1,
-            relief="sunken"
-        )
-        product_list_scrollbar = ttk.Scrollbar(self.product_list_frame, orient="vertical", command=self.product_listbox.yview)
-        self.product_listbox.configure(yscrollcommand=product_list_scrollbar.set)
-        self.product_listbox.grid(row=0, column=0, sticky="nsew")
-        product_list_scrollbar.grid(row=0, column=1, sticky="ns")
+            self.product_list_frame = ttk.Frame(self.product_frame, style=self.STYLE_APP_FRAME)
+            self.product_list_frame.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=2)
+            self.product_list_frame.rowconfigure(0, weight=1)
+            self.product_list_frame.columnconfigure(0, weight=1)
+            # ***MODIFIED***: Apply new selection colors directly to the Listbox
+            self.product_listbox = tk.Listbox(
+                self.product_list_frame,
+                exportselection=False,
+                bg="#FFFFFF",
+                fg="#000000",
+                selectbackground=self.listbox_select_bg, # Use stored style color
+                selectforeground=self.listbox_select_fg, # Use stored style color
+                borderwidth=1,
+                relief="sunken"
+            )
+            product_list_scrollbar = ttk.Scrollbar(self.product_list_frame, orient="vertical", command=self.product_listbox.yview)
+            self.product_listbox.configure(yscrollcommand=product_list_scrollbar.set)
+            self.product_listbox.grid(row=0, column=0, sticky="nsew")
+            product_list_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        product_mgmt_button_frame = ttk.Frame(self.product_frame, style='App.TFrame')
-        product_mgmt_button_frame.grid(row=4, column=0, columnspan=2, pady=5, sticky='w')
-        self.add_product_button = ttk.Button(product_mgmt_button_frame, text="Add New Product", command=self.prompt_new_item, style='Action.TButton')
-        self.edit_product_button = ttk.Button(product_mgmt_button_frame, text="Edit Product", command=self.prompt_edit_item, style='Action.TButton')
-        self.remove_product_button = ttk.Button(product_mgmt_button_frame, text="Remove Product", command=self.remove_selected_product_permanently, style='Action.TButton')
-        self.view_customers_button = ttk.Button(product_mgmt_button_frame, text="Manage Customers", command=self.view_customers, style='Action.TButton')
-        self.add_product_button.pack(side=tk.LEFT, padx=2)
-        self.edit_product_button.pack(side=tk.LEFT, padx=2)
-        self.remove_product_button.pack(side=tk.LEFT, padx=2)
-        self.view_customers_button.pack(side=tk.LEFT, padx=2)
+            product_mgmt_button_frame = ttk.Frame(self.product_frame, style=self.STYLE_APP_FRAME)
+            product_mgmt_button_frame.grid(row=4, column=0, columnspan=2, pady=5, sticky='w')
+            self.add_product_button = ttk.Button(product_mgmt_button_frame, text="Add New Product", command=self.prompt_new_item, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.add_product_button, "Add a new product to the list. Shortcut: Alt+N")
+            self.edit_product_button = ttk.Button(product_mgmt_button_frame, text="Edit Product", command=self.prompt_edit_item, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.edit_product_button, "Edit the selected product. Shortcut: Alt+E")
+            self.remove_product_button = ttk.Button(product_mgmt_button_frame, text="Remove Product", command=self.remove_selected_product_permanently, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.remove_product_button, "Remove the selected product permanently. Shortcut: Del")
+            self.view_customers_button = ttk.Button(product_mgmt_button_frame, text="Manage Customers", command=self.view_customers, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.view_customers_button, "Open customer management window. Shortcut: Alt+U")
+            self.add_product_button.pack(side=tk.LEFT, padx=2)
+            self.edit_product_button.pack(side=tk.LEFT, padx=2)
+            self.remove_product_button.pack(side=tk.LEFT, padx=2)
+            self.view_customers_button.pack(side=tk.LEFT, padx=2)
+        except Exception as e:
+            logging.exception("Error during product panel setup.")
+            messagebox.showerror("Product Panel Error", f"An error occurred during product panel setup:\n{e}", parent=self.root)
 
     def _setup_sale_panel(self):
-        """Create widgets for the current sale panel."""
-        ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=5, sticky='w')
+        """Create widgets for the current sale panel, including sale treeview, customer selection, and action buttons."""
+        try:
+            ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold"), style=self.STYLE_HEADER_LABEL).grid(row=0, column=0, columnspan=2, pady=5, sticky='w')
 
-        # Sale Treeview
-        columns = ("item", "quantity", "price", "subtotal")
-        self.sale_tree = ttk.Treeview(self.sale_frame, columns=columns, show="headings", selectmode="browse", style="Custom.Treeview")
-        self.sale_tree.heading("item", text="Item")
-        self.sale_tree.heading("quantity", text="Qty")
-        self.sale_tree.heading("price", text="Price")
-        self.sale_tree.heading("subtotal", text="Subtotal")
-        self.sale_tree.column("item", anchor=tk.W, width=150, stretch=True)
-        self.sale_tree.column("quantity", anchor=tk.CENTER, width=40, stretch=False)
-        self.sale_tree.column("price", anchor=tk.E, width=80, stretch=False)
-        self.sale_tree.column("subtotal", anchor=tk.E, width=90, stretch=False)
-        sale_scrollbar = ttk.Scrollbar(self.sale_frame, orient="vertical", command=self.sale_tree.yview)
-        self.sale_tree.configure(yscrollcommand=sale_scrollbar.set)
-        self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2)
-        sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2)
+            # Sale Treeview
+            columns = ("item", "quantity", "price", "subtotal")
+            self.sale_tree = ttk.Treeview(self.sale_frame, columns=columns, show="headings", selectmode="browse", style=self.STYLE_CUSTOM_TREEVIEW)
+            self.sale_tree.heading("item", text="Item")
+            self.sale_tree.heading("quantity", text="Qty")
+            self.sale_tree.heading("price", text="Price")
+            self.sale_tree.heading("subtotal", text="Subtotal")
+            self.sale_tree.column("item", anchor=tk.W, width=150, stretch=True)
+            self.sale_tree.column("quantity", anchor=tk.CENTER, width=40, stretch=False)
+            self.sale_tree.column("price", anchor=tk.E, width=80, stretch=False)
+            self.sale_tree.column("subtotal", anchor=tk.E, width=90, stretch=False)
+            sale_scrollbar = ttk.Scrollbar(self.sale_frame, orient="vertical", command=self.sale_tree.yview)
+            self.sale_tree.configure(yscrollcommand=sale_scrollbar.set)
+            self.sale_tree.grid(row=1, column=0, sticky="nsew", padx=(5,0), pady=2)
+            sale_scrollbar.grid(row=1, column=1, sticky="ns", padx=(0,5), pady=2)
 
-        # Customer Selection Area
-        customer_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        customer_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=(5,2))
-        customer_frame.columnconfigure(1, weight=1)
-        self.select_customer_button = ttk.Button(customer_frame, text="Select Customer (Ctrl+C)", command=self.select_customer_for_sale, style='Action.TButton')
-        self.customer_display_label = ttk.Label(customer_frame, textvariable=self.customer_display_var, anchor=tk.W, style='TLabel')
-        self.select_customer_button.grid(row=0, column=0, padx=(0, 5))
-        self.customer_display_label.grid(row=0, column=1, sticky='ew')
+            # Customer Selection Area
+            customer_frame = ttk.Frame(self.sale_frame, style=self.STYLE_APP_FRAME)
+            customer_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=(5,2))
+            customer_frame.columnconfigure(1, weight=1)
+            self.select_customer_button = ttk.Button(customer_frame, text="Select Customer (Ctrl+C)", command=self.select_customer_for_sale, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.select_customer_button, "Select a customer for the sale. Shortcut: Ctrl+C")
+            self.customer_display_label = ttk.Label(customer_frame, textvariable=self.customer_display_var, anchor=tk.W, style=self.STYLE_LABEL)
+            self.select_customer_button.grid(row=0, column=0, padx=(0, 5))
+            self.customer_display_label.grid(row=0, column=1, sticky='ew')
 
-        # Finalize/Total Area
-        finalize_total_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        finalize_total_frame.grid(row=3, column=0, columnspan=2, pady=(2,5), sticky="ew")
-        finalize_total_frame.columnconfigure(0, weight=1)
-        finalize_total_frame.columnconfigure(1, weight=0)
-        finalize_total_frame.columnconfigure(2, weight=0)
-        self.finalize_button = ttk.Button(finalize_total_frame, text="Finalize Sale (Ctrl+F)", command=self.finalize_sale, style='Finalize.TButton')
-        self.total_label = ttk.Label(finalize_total_frame, text=f"{gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 14, "bold"), style='Total.TLabel')
-        self.finalize_button.grid(row=0, column=1, padx=(5, 10), sticky="e")
-        self.total_label.grid(row=0, column=2, padx=(0, 5), sticky="e")
+            # Finalize/Total Area
+            finalize_total_frame = ttk.Frame(self.sale_frame, style=self.STYLE_APP_FRAME)
+            finalize_total_frame.grid(row=3, column=0, columnspan=2, pady=(2,5), sticky="ew")
+            finalize_total_frame.columnconfigure(0, weight=1)
+            finalize_total_frame.columnconfigure(1, weight=0)
+            finalize_total_frame.columnconfigure(2, weight=0)
+            self.finalize_button = ttk.Button(finalize_total_frame, text="Finalize Sale (Ctrl+F)", command=self.finalize_sale, style=self.STYLE_FINALIZE_BUTTON)
+            gui_utils.Tooltip(self.finalize_button, "Finalize and record the current sale. Shortcut: Ctrl+F")
+            self.total_label = ttk.Label(finalize_total_frame, text=f"{gui_utils.CURRENCY_SYMBOL}0.00", font=("Arial", 14, "bold"), style=self.STYLE_TOTAL_LABEL)
+            self.finalize_button.grid(row=0, column=1, padx=(5, 10), sticky="e")
+            self.total_label.grid(row=0, column=2, padx=(0, 5), sticky="e")
 
-        # Other Sale Action Buttons
-        other_sale_actions_frame = ttk.Frame(self.sale_frame, style='App.TFrame')
-        other_sale_actions_frame.grid(row=4, column=0, columnspan=2, pady=(0, 5), sticky="e")
-        self.history_button = ttk.Button(other_sale_actions_frame, text="View History (Ctrl+H)", command=self.view_sales_history, style='Action.TButton')
-        self.clear_button = ttk.Button(other_sale_actions_frame, text="Clear Sale", command=self.clear_sale, style='Action.TButton')
-        self.remove_item_button = ttk.Button(other_sale_actions_frame, text="Remove Item", command=self.remove_selected_item_from_sale, style='Action.TButton')
-        self.decrease_qty_button = ttk.Button(other_sale_actions_frame, text="- Qty", command=self.decrease_item_quantity, style='Action.TButton')
-        # Pack buttons right-to-left
-        self.history_button.pack(side=tk.RIGHT, padx=2)
-        self.clear_button.pack(side=tk.RIGHT, padx=2)
-        self.remove_item_button.pack(side=tk.RIGHT, padx=2)
-        self.decrease_qty_button.pack(side=tk.RIGHT, padx=2)
+            # Other Sale Action Buttons
+            other_sale_actions_frame = ttk.Frame(self.sale_frame, style=self.STYLE_APP_FRAME)
+            other_sale_actions_frame.grid(row=4, column=0, columnspan=2, pady=(0, 5), sticky="e")
+            self.history_button = ttk.Button(other_sale_actions_frame, text="View History (Ctrl+H)", command=self.view_sales_history, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.history_button, "View sales history. Shortcut: Ctrl+H")
+            self.clear_button = ttk.Button(other_sale_actions_frame, text="Clear Sale", command=self.clear_sale, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.clear_button, "Clear the current sale. Shortcut: Alt+L")
+            self.remove_item_button = ttk.Button(other_sale_actions_frame, text="Remove Item", command=self.remove_selected_item_from_sale, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.remove_item_button, "Remove selected item from sale. Shortcut: Del")
+            self.decrease_qty_button = ttk.Button(other_sale_actions_frame, text="- Qty", command=self.decrease_item_quantity, style=self.STYLE_ACTION_BUTTON)
+            gui_utils.Tooltip(self.decrease_qty_button, "Decrease quantity of selected item. Shortcut: -")
+            # Pack buttons right-to-left
+            self.history_button.pack(side=tk.RIGHT, padx=2)
+            self.clear_button.pack(side=tk.RIGHT, padx=2)
+            self.remove_item_button.pack(side=tk.RIGHT, padx=2)
+            self.decrease_qty_button.pack(side=tk.RIGHT, padx=2)
+        except Exception as e:
+            logging.exception("Error during sale panel setup.")
+            messagebox.showerror("Sale Panel Error", f"An error occurred during sale panel setup:\n{e}", parent=self.root)
 
     def _bind_shortcuts(self):
-        """Binds keyboard shortcuts to application functions."""
+        """Bind keyboard shortcuts to application functions for improved accessibility."""
         logging.debug("Binding keyboard shortcuts...")
         self.root.bind('<F1>', self.focus_first_product)
         self.root.bind('<Control-f>', lambda event=None: self.finalize_sale())
@@ -311,7 +350,7 @@ class POSApp:
         logging.debug("Shortcuts bound.")
 
     def _load_initial_data(self):
-        """Load and display initial data after UI setup."""
+        """Load and display initial data after UI setup, including products and sale display."""
         logging.info("Loading initial data...")
         self.populate_product_buttons()
         self.populate_product_management_list()
@@ -442,11 +481,11 @@ class POSApp:
 
 
     def _configure_scrollable_frame(self, event):
-        """Reset the scroll region to encompass the inner frame."""
+        """Reset the scroll region of the product canvas to encompass the inner frame."""
         self.product_canvas.configure(scrollregion=self.product_canvas.bbox("all"))
 
     def _configure_scrollable_frame_width(self, event):
-        """Adjusts the width of the inner frame within the canvas."""
+        """Adjust the width of the inner frame within the product canvas to match the canvas width."""
         # Only adjust width if the canvas exists and the frame window item exists
         if hasattr(self, 'product_canvas') and self.product_canvas.find_withtag("scrollable_frame"):
              # Check if width is valid (greater than 0)
@@ -514,7 +553,7 @@ class POSApp:
             # Determine command based on product name
             button_command = self.prompt_custom_item if name == custom_sale_name else lambda n=name: self.add_item(n)
 
-            btn = ttk.Button(self.scrollable_frame, text=btn_text, command=button_command, style='Product.TButton')
+            btn = ttk.Button(self.scrollable_frame, text=btn_text, command=button_command, style=self.STYLE_PRODUCT_BUTTON)
             btn.grid(row=row_num, column=col_num, padx=2, pady=2, sticky="ew")
             if idx == 0: self.first_product_button = btn # Set F1 focus target
 
@@ -542,7 +581,7 @@ class POSApp:
         logging.debug("Product management list populated.")
 
     def _get_selected_product_details(self):
-        """Gets name and price of the selected product in the listbox."""
+        """Get the name and price of the selected product in the management listbox."""
         indices = self.product_listbox.curselection()
         if not indices:
             logging.warning("Attempted action without selecting a product in management list.")
@@ -848,4 +887,3 @@ class POSApp:
         else:
             logging.debug("Bringing existing CustomerListWindow to front.")
             self.customer_list_window.deiconify(); self.customer_list_window.lift(); self.customer_list_window.focus_set(); self.customer_list_window.grab_set()
-

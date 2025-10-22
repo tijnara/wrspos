@@ -39,18 +39,11 @@ class CustomerListWindow(tk.Toplevel):
         self._setup_search_frame()
         self._setup_customer_list_tree()  # Keyboard bindings will be added here
         self._setup_purchase_history_tree()
-        self._setup_bottom_buttons()
-
-        self.selected_customer_id = None
-        self.populate_customer_list()
-        self.clear_form()
-
-        self.bind('<Escape>', lambda event=None: self.destroy())
 
     def _setup_form_frame(self):
-        form_frame = ttk.LabelFrame(self, text="Customer Details", padding="10")
-        form_frame.grid(row=0, column=0, padx=10, pady=(10, 5), sticky="ew")
-        form_frame.columnconfigure(1, weight=1)
+        form_frame = ttk.LabelFrame(self, text="Customer Form")
+        form_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
+        gui_utils.style_label(form_frame)
 
         ttk.Label(form_frame, text="Name:").grid(row=0, column=0, padx=5, pady=2, sticky="w")
         self.name_var = tk.StringVar()
@@ -77,9 +70,9 @@ class CustomerListWindow(tk.Toplevel):
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
     def _setup_search_frame(self):
-        search_frame = ttk.Frame(self, padding=(10, 0, 10, 5))
-        search_frame.grid(row=1, column=0, sticky="ew")
-        search_frame.columnconfigure(1, weight=1)
+        search_frame = ttk.LabelFrame(self, text="Search")
+        search_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
+        gui_utils.style_label(search_frame)
 
         ttk.Label(search_frame, text="Search:").grid(row=0, column=0, padx=(0, 5))
         self.search_var = tk.StringVar()
@@ -125,7 +118,7 @@ class CustomerListWindow(tk.Toplevel):
         self.customer_tree.bind("<Delete>", self._handle_customer_tree_delete)
 
     def _setup_purchase_history_tree(self):
-        history_frame = ttk.LabelFrame(self, text="Purchase History for Selected Customer", padding="10")
+        history_frame = ttk.LabelFrame(self, text="Purchase History", padding="10")
         history_frame.grid(row=3, column=0, padx=10, pady=5, sticky="nsew")
         history_frame.rowconfigure(0, weight=1)
         history_frame.columnconfigure(0, weight=1)
@@ -165,6 +158,12 @@ class CustomerListWindow(tk.Toplevel):
 
         close_button = ttk.Button(bottom_button_frame, text="Close", command=self.destroy)
         close_button.pack(side=tk.LEFT, padx=10)
+
+        gui_utils.Tooltip(self.save_button, "Save or update the customer details.")
+        gui_utils.Tooltip(self.clear_button, "Clear the customer form.")
+        gui_utils.Tooltip(export_button, "Export the customer list to a CSV file.")
+        gui_utils.Tooltip(self.delete_button, "Delete the selected customer.")
+        gui_utils.Tooltip(close_button, "Close the customer management window.")
 
     # --- NEW Keyboard Navigation Handlers for customer_tree ---
     def _handle_customer_tree_nav(self, event):
@@ -477,4 +476,3 @@ class CustomerListWindow(tk.Toplevel):
         except Exception as e:
             logging.exception(f"Error exporting customer list to CSV: {file_path}")
             messagebox.showerror("Export Failed", f"Could not export customer list.\nError: {e}", parent=self)
-

@@ -1,9 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
-from tkinter import simpledialog
-import datetime
-import os
 import logging  # <--- IMPORT ADDED HERE
 
 import db_operations
@@ -27,9 +24,12 @@ class PriceInputDialog(tk.Toplevel):
         self.resizable(False, False)
         self.columnconfigure(0, weight=1)
 
-        ttk.Label(self, text=prompt, wraplength=dialog_width - 20).grid(row=0, column=0, padx=10, pady=(10, 5),
-                                                                        sticky='w')
+        # --- Prompt Label ---
+        prompt_label = ttk.Label(self, text=prompt, wraplength=dialog_width - 20)
+        gui_utils.style_label(prompt_label)
+        prompt_label.grid(row=0, column=0, padx=10, pady=(10, 5), sticky='w')
 
+        # --- Price Entry ---
         self.price_var = tk.StringVar()
         if initialvalue is not None:
             self.price_var.set(str(initialvalue))
@@ -40,48 +40,38 @@ class PriceInputDialog(tk.Toplevel):
         self.price_entry.focus_set()
         self.price_entry.select_range(0, tk.END)
 
+        # --- Buttons ---
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=2, column=0, pady=10)
+        button_frame.grid(row=2, column=0, pady=(10, 5))
 
-        ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok, width=10)
+        ok_button = ttk.Button(button_frame, text="OK", command=self.on_ok)
+        gui_utils.style_button(ok_button)
         ok_button.pack(side=tk.LEFT, padx=5)
-        cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel, width=10)
+
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
+        gui_utils.style_button(cancel_button)
         cancel_button.pack(side=tk.LEFT, padx=5)
 
-        self.bind('<Return>', lambda event=None: self.on_ok())
-        self.bind('<Escape>', lambda event=None: self.on_cancel())
-        self.protocol("WM_DELETE_WINDOW", self.on_cancel)
-        self.wait_window(self)
+        gui_utils.Tooltip(ok_button, "Confirm your selection.")
+        gui_utils.Tooltip(cancel_button, "Cancel and close the dialog.")
 
-    def validate_price(self, P):
-        """Allow only digits and at most one decimal point."""
-        if P == "": return True
+    def validate_price(self, new_value):
+        """Validates that the input is a valid price."""
+        if not new_value:
+            return True
         try:
-            if P.count('.') <= 1 and all(c.isdigit() or c == '.' for c in P):
-                if P.startswith('0') and len(P) > 1 and not P.startswith('0.'):
-                    return False
-                return True
-            else:
-                return False
+            float(new_value)
+            return True
         except ValueError:
             return False
 
     def on_ok(self):
-        price_str = self.price_var.get().strip()
-        if not price_str:
-            messagebox.showwarning("Missing Input", "Please enter a price.", parent=self)
-            return
-        try:
-            price = float(price_str)
-            if price < 0:
-                raise ValueError("Price cannot be negative.")
-            self.result = price
-            self.destroy()
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Please enter a valid non-negative number for the price.",
-                                 parent=self)
+        """Handles the OK button click."""
+        self.result = self.price_var.get()
+        self.destroy()
 
     def on_cancel(self):
+        """Handles the Cancel button click."""
         self.result = None
         self.destroy()
 
@@ -106,7 +96,10 @@ class CustomerSelectionDialog(tk.Toplevel):
         self.minsize(dialog_width, 250)
 
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(0, weight=0)  # Prompt label
+        self.rowconfigure(1, weight=0)  # Entry field
+        self.rowconfigure(2, weight=1)  # Listbox (if applicable)
+        self.rowconfigure(3, weight=0)  # Buttons
 
         ttk.Label(self, text="Enter or select customer name:").grid(row=0, column=0, pady=(10, 2), padx=10, sticky='w')
 
@@ -148,6 +141,9 @@ class CustomerSelectionDialog(tk.Toplevel):
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_button.pack(side=tk.LEFT, padx=10)
+
+        gui_utils.Tooltip(ok_button, "Confirm your selection.")
+        gui_utils.Tooltip(cancel_button, "Cancel and close the dialog.")
 
         self.bind('<Return>', lambda event=None: self.on_ok())
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)
@@ -260,6 +256,9 @@ class CustomPriceDialog(tk.Toplevel):
         ok_button.pack(side=tk.LEFT, padx=10)
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_button.pack(side=tk.LEFT, padx=10)
+
+        gui_utils.Tooltip(ok_button, "Add the item with custom price to the sale.")
+        gui_utils.Tooltip(cancel_button, "Cancel and close the dialog.")
 
         self.bind('<Return>', lambda event=None: self.on_ok())
         self.protocol("WM_DELETE_WINDOW", self.on_cancel)

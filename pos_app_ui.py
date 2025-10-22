@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import ttk
-import logging
 import gui_utils # Needed for CURRENCY_SYMBOL and new color constants
 
 # --- UI Class ---
@@ -17,7 +16,6 @@ class POSAppUI:
             root: The main tkinter root window.
             style: The ttk.Style object configured for the application.
         """
-        logging.debug("Initializing POSAppUI...")
         self.root = root
         self.style = style
 
@@ -35,10 +33,8 @@ class POSAppUI:
         self._setup_status_bar()
         self._setup_product_panel()
         self._setup_sale_panel()
-        logging.debug("POSAppUI Initialization complete.")
 
     def _setup_frames(self):
-        logging.debug("Setting up main frames.")
         self.product_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
         self.sale_frame = ttk.Frame(self.root, padding="5", style='App.TFrame')
         self.product_frame.grid(row=0, column=0, sticky="nsew")
@@ -62,13 +58,11 @@ class POSAppUI:
         self.sale_frame.rowconfigure(5, weight=0)
 
     def _setup_status_bar(self):
-        logging.debug("Setting up status bar.")
         # The style for this label will be changed dynamically by POSAppLogic
         self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2), style='Status.TLabel') # Default style
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky='ew')
 
     def _setup_product_panel(self):
-        logging.debug("Setting up product panel.")
         ttk.Label(self.product_frame, text="Add to Sale", font=("Arial", 12, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=(0, 2), sticky='w')
         self.product_canvas = tk.Canvas(self.product_frame, bg=self.style.lookup('App.TFrame', 'background'), highlightthickness=0)
         product_scrollbar = ttk.Scrollbar(self.product_frame, orient="vertical", command=self.product_canvas.yview)
@@ -114,7 +108,6 @@ class POSAppUI:
         self.view_customers_button.pack(side=tk.LEFT, padx=2)
 
     def _setup_sale_panel(self):
-        logging.debug("Setting up sale panel.")
         ttk.Label(self.sale_frame, text="Current Sale", font=("Arial", 14, "bold"), style='Header.TLabel').grid(row=0, column=0, columnspan=2, pady=5, sticky='w')
 
         columns = ("item", "quantity", "price", "subtotal")
