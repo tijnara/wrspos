@@ -838,9 +838,15 @@ class POSAppLogic:
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Center the dialog
-        dialog.geometry("+%d+%d" % (self.root.winfo_rootx() + 50,
-                                   self.root.winfo_rooty() + 50))
+        # Center the dialog on the screen
+        dialog.update_idletasks()
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        dialog_width = dialog.winfo_width()
+        dialog_height = dialog.winfo_height()
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        dialog.geometry(f"+{x}+{y}")
         
         # Add date picker
         date_frame = ttk.Frame(dialog, padding="10")
